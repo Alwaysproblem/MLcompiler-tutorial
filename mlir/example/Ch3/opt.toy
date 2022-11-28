@@ -10,5 +10,8 @@ def main() {
   var b<2, 3> = [1, 2, 3, 4, 5, 6];
   var c = multiply_transpose(a, b);
   var d = multiply_transpose(b, a);
+  var e <2,1> = [1, 2];
+  var f <2,1> = e;
+  var g <2,1> = f;
   print(d);
 }
