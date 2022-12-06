@@ -1,4 +1,6 @@
-# MLIR
+# Standalone environment for MLIR tutorial.
+
+*note: The code of this tutorial is from the [mlir-website-tutorial](https://mlir.llvm.org/docs/Tutorials/Toy/Ch-1/). This repo only provide a simple way to setting up the environment.*
 
 ## Environment Setup
 
@@ -46,5 +48,5 @@ mv install ../../example/third_party
 
 ```bash
 cd example
-bash build all
+bash build.sh all
 ```
