@@ -1,0 +1,54 @@
+<mxfile host="65bd71144e">
+    <diagram id="9O7KRbrtFINHXy_Z1PgS" name="第 1 页">
+        <mxGraphModel dx="1011" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="2" value="Xla Run Op" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;dashed=1;" vertex="1" parent="1">
+                    <mxGeometry x="190" y="140" width="430" height="540" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="" style="group" vertex="1" connectable="0" parent="1">
+                    <mxGeometry x="301.25" y="150" width="207.5" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="6" value="" style="group" vertex="1" connectable="0" parent="5">
+                    <mxGeometry y="10" width="207.5" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="7" value="" style="group" vertex="1" connectable="0" parent="6">
+                    <mxGeometry width="207.5" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="8" value="LocalExecutable" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;" vertex="1" parent="7">
+                    <mxGeometry width="207.5" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="9" value="HloModuleProto" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="7">
+                    <mxGeometry x="20" y="40" width="170" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="33" value="" style="edgeStyle=none;html=1;fontSize=12;" edge="1" parent="1" source="24" target="30">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="24" value="jit/kernels/xla_ops.cc" style="swimlane;startSize=20;horizontal=1;childLayout=flowLayout;flowOrientation=north;resizable=0;interRankCellSpacing=50;containerType=tree;fontSize=12;rounded=1;" vertex="1" parent="1">
+                    <mxGeometry x="275" y="350" width="260" height="190" as="geometry"/>
+                </mxCell>
+                <mxCell id="25" value="&lt;font style=&quot;font-size: 12px&quot;&gt;RunExecutable&lt;/font&gt;" style="whiteSpace=wrap;html=1;fontSize=17;rounded=1;" vertex="1" parent="24">
+                    <mxGeometry x="20" y="40" width="220" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="28" value="" style="edgeStyle=none;html=1;noEdgeStyle=1;orthogonal=1;" edge="1" source="25" target="29" parent="24">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="130" y="92"/>
+                            <mxPoint x="130" y="118"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="29" value="&lt;font style=&quot;font-size: 12px&quot;&gt;xla::LocalExecutable::Run&lt;/font&gt;" style="whiteSpace=wrap;html=1;fontSize=17;rounded=1;" vertex="1" parent="24">
+                    <mxGeometry x="20" y="130" width="220" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="27" style="edgeStyle=none;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=19;" edge="1" parent="1" source="8" target="24">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="30" value="xla::ExecutionOutput" style="rounded=1;whiteSpace=wrap;html=1;fontSize=12;" vertex="1" parent="1">
+                    <mxGeometry x="295" y="590" width="220" height="60" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
