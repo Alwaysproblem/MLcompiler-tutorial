@@ -12,10 +12,16 @@ conda activate mlir
 conda install cmake ninja
 ```
 
+or 
+
+```bash
+apt install zlib1g-dev g++-9 gcc-9 cmake ninja-build clang lld
+```
+
 - build mlir and llvm basic package from [mlir](https://mlir.llvm.org/getting_started/)
 
 ```bash
-git clone https://github.com/llvm/llvm-project.git
+git clone -b 502c246519ec7462450e0b05465063d190cadcb5 https://github.com/llvm/llvm-project.git
 mkdir llvm-project/build
 cd llvm-project/build
 cmake -G Ninja ../llvm \
