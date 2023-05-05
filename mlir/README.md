@@ -9,10 +9,10 @@
 ```bash
 conda create -n mlir
 conda activate mlir
-conda install cmake ninja
+conda install cmake ninja clang lld ncurses -y
 ```
 
-or 
+or
 
 ```bash
 apt install zlib1g-dev g++-9 gcc-9 cmake ninja-build clang lld
@@ -21,16 +21,18 @@ apt install zlib1g-dev g++-9 gcc-9 cmake ninja-build clang lld
 - build mlir and llvm basic package from [mlir](https://mlir.llvm.org/getting_started/)
 
 ```bash
-git clone -b 502c246519ec7462450e0b05465063d190cadcb5 https://github.com/llvm/llvm-project.git
+git clone -b release/15.x https://github.com/llvm/llvm-project.git
+# git clone -b 502c246519ec7462450e0b05465063d190cadcb5 https://github.com/llvm/llvm-project.git
 mkdir llvm-project/build
 cd llvm-project/build
 cmake -G Ninja ../llvm \
    -DCMAKE_INSTALL_PREFIX=install \
    -DLLVM_ENABLE_PROJECTS=mlir \
    -DLLVM_BUILD_EXAMPLES=ON \
-   -DLLVM_TARGETS_TO_BUILD="X86;NVPTX;AMDGPU" \
+   -DLLVM_TARGETS_TO_BUILD="Native;NVPTX;AMDGPU" \
    -DCMAKE_BUILD_TYPE=Release \
    -DLLVM_ENABLE_ASSERTIONS=ON
+   # -DLLVM_ENABLE_LLD=ON -DLLVM_ENABLE_LIBEDIT=FALSE
 # Using clang and lld speeds up the build, we recomment adding:
 #  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DLLVM_ENABLE_LLD=ON
 # CCache can drastically speed up further rebuilds, try adding:

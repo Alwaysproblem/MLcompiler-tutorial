@@ -14,6 +14,8 @@ include_directories(${MLIR_INCLUDE_DIR})
 include(LLVMDistributionSupport)
 include(TableGen)
 include(AddMLIR)
+include(AddLLVM)
+# include(HandleLLVMOptions)
 
 # note: fix the llvm::cl undefined reference problem
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fno-rtti")

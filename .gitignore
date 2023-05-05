@@ -8,5 +8,8 @@ serving/
 bazel-*
 *.whl
 third_party
+third_party_bak
 llvm-*
 .vscode
+ipu
+external

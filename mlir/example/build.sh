@@ -16,8 +16,9 @@ cmake ..   -G Ninja \
   -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++ \
   -DMLIR_DIR=${_workspaceFolder}/third_party/lib/cmake/mlir \
   -DLLVM_DIR=${_workspaceFolder}/third_party/lib/cmake/llvm \
-  -DCMAKE_MODULE_PATH=${_workspaceFolder}/third_party/lib/cmake/mlir;${_workspaceFolder}/third_party/lib/cmake/llvm \
+  -DCMAKE_MODULE_PATH="${_workspaceFolder}/third_party/lib/cmake/mlir;${_workspaceFolder}/third_party/lib/cmake/llvm" \
   -DMLIR_TABLEGEN_EXE=${_workspaceFolder}/third_party/bin/mlir-tblgen
+  # -DLibEdit_DIR=/root/anaconda3/envs/mlir/lib
 
 # ninja
 cmake \
