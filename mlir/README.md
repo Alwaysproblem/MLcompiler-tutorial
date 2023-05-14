@@ -52,6 +52,18 @@ mv install ../../example/third_party
 # cd ../../ && rm llvm-project
 ```
 
+## conda setup
+
+```bash
+# os must be higher than ubuntu 22.04.
+# the gcc or g++ version need to be higher than gcc-11
+# apt install -yq software-properties-common \
+# add-apt-repository -y ppa:ubuntu-toolchain-r/test \
+# apt install -yq gcc-11 g++-11
+# conda install cmake ninja clang-format clang lld ncurses mlir llvm -c conda-forge
+conda install cmake ninja clang-format clang=15.* mlir=15.* llvm=15.0.7 -c conda-forge
+```
+
 ## build example
 
 ```bash
