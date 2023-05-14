@@ -2,7 +2,7 @@
 
 ## MLIR
 
-- [README.md](mlir/README.md)
+- [README.md](mlir/example/README.md)
 
 ## XLA
 
