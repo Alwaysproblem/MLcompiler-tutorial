@@ -2,3 +2,9 @@
 	path = mlir/llvm_tutor
 	url = https://github.com/Alwaysproblem/llvm-tutor.git
 	branch = dev
+[submodule "xla/tensorflow"]
+	path = xla/tensorflow
+	url = https://github.com/tensorflow/tensorflow
+[submodule "xla/jax"]
+	path = xla/jax
+	url = https://github.com/google/jax
