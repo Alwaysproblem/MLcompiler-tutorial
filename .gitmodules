@@ -8,3 +8,6 @@
 [submodule "xla/jax"]
 	path = xla/jax
 	url = https://github.com/google/jax
+[submodule "xla/openxla"]
+	path = xla/openxla
+	url = https://github.com/openxla/xla

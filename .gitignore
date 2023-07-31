@@ -13,3 +13,4 @@ llvm-*
 .vscode
 ipu
 external
+xla/jax-test
