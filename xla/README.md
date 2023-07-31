@@ -58,4 +58,7 @@ we can install the dependencies with conda
 ```bash
 # gcc-9, bazel
 conda create -n jax-build python=3.10 numpy wheel build -c conda-forge  -y
+bazel run --color auto //jaxlib/tools:build_wheel -- --output_path <dir> --cpu=x86_64 --editable
 ```
+
+[build from source](https://jax.readthedocs.io/en/latest/developer.html)
