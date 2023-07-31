@@ -36,10 +36,20 @@ TensorFlow在XLA中JIT编译后调用编译函数并获取结果的主要步骤�
 
 ```bash
 # gcc-9, bazel
-conda create -n xla-build python=3.9 numpy -y
+conda create -n tf2-build python=3.10 requests numpy wheel build -c conda-forge  -y
 ```
 
 [build from source](https://github.com/openxla/xla/blob/main/docs/build_from_source.md)
+
+## build Tensorflow 2 env
+
+```bash
+conda create -n tf2-build python=3.10 requests numpy wheel build -c conda-forge  -y
+yes '' | GCC_HOST_COMPILER_PATH=/usr/bin/gcc-10 CC=/usr/bin/gcc-10 TF_NEED_ROCM=0 TF_NEED_CUDA=0 TF_CUDA_CLANG=0 ./configure
+bazel build //tensorflow/tools/pip_package:build_pip_package
+```
+
+[build from source](https://www.tensorflow.org/install/source?hl=zh-cn)
 
 ## build jax env
 
