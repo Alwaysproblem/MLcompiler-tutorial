@@ -32,7 +32,7 @@ TensorFlow在XLA中JIT编译后调用编译函数并获取结果的主要步骤�
 - https://zhuanlan.zhihu.com/p/397327235
 - https://zhuanlan.zhihu.com/p/427444916
 
-## build openxla env
+## build openxla env (not successful)
 
 ```bash
 # gcc-9, bazel
@@ -62,3 +62,114 @@ bazel run --color auto //jaxlib/tools:build_wheel -- --output_path <dir> --cpu=x
 ```
 
 [build from source](https://jax.readthedocs.io/en/latest/developer.html)
+
+## Logging
+
+- TF_CPP_MIN_LOG_LEVEL: Level to print messages for. TF_CPP_MIN_LOG_LEVEL=0 will turn on INFO logging, TF_CPP_MIN_LOG_LEVEL=1 WARNING and so on.
+- TF_CPP_MAX_VLOG_LEVEL=10
+- TF_CPP_VMODULE='pjit=10' will print `external/xla/xla/python/pjit.cc` vlog. I assume that `pjit` is the file name of the module.
+- `TF_CPP_MAX_VLOG_LEVEL=10 TF_CPP_MIN_LOG_LEVEL=0 python test.py` will print all logs.
+
+## Jax AutoDiff takeaways
+
+I will take an code below as a example to explain how jax autodiff works.
+
+```python
+def f(x):
+  y = sin(x) * 2.
+  z = -y + x
+  return z
+```
+
+Jax will compute the forward pass and backward pass at the same time.
+
+due to the chain rules
+
+The chain rule states that the derivative of a composite function is equal to the derivative of the outer function multiplied by the derivative of the inner function.
+
+In mathematical notation, this can be expressed as:
+
+If $f(x) = g(h(x))$,
+
+then $f'(x) = g'(h(x)) * h'(x)$
+
+Where:
+
+$f(x)$ is the composite function
+
+$g(x)$ is the outer function
+
+$h(x)$ is the inner function
+
+$f'(x)$  is the derivative of $f(x)$
+
+$g'(x)$  is the derivative of $g(x)$
+
+$h'(x)$  is the derivative of $h(x)$
+
+when you exhausted the end of backward pass, you will find all the derivative formular will be like:
+
+then
+
+$$ \frac{df(x)}{dx} = \frac{dg(x)}{dh(x)} \times \frac{dh(x)}{dx} \times \frac{dx}{dx} = \frac{dg(x)}{dh(x)} \times \frac{dh(x)}{dx} \times 1$$
+
+This is why the tangents (the second input) of `jax.jvp` will be `1.0`.
+In another way to explain this will be:
+
+```python
+from jax import jvp
+
+def f(x, y):
+  return x + y
+
+print(jvp(f, (1., 2.), (1., 0.))) # this is the derivative wrt x.
+print(jvp(f, (1., 2.), (0., 1.))) # this is the derivative wrt y.
+```
+
+The example above show the partial derivative of $f(x, y)$ wrt $x$ and $y$.
+
+also you can use `jax.grad` to compute the partial derivative of $f(x, y)$ wrt $x$ and $y$.
+
+```python
+from jax import grad
+
+def f(x, y):
+  return x + y
+
+print(grad(f, argnums=0)(1., 2.)) # this is the derivative wrt x.
+print(grad(f, argnums=1)(1., 2.)) # this is the derivative wrt y.
+```
+
+In light of this, we can calculate the forward pass and backward pass at the same time.
+
+The idea of this is like:
+
+```python
+from jax import grad
+def f(x):
+  y = sin(x) * 2.
+  z = -y + x
+  return z
+
+print(grad(f)(3.0))
+
+```
+
+1. compute sin(x) with forward rule and compute the backward value with backward rule of sin(x). Inputs of backward are `primals = (3.0, )` and `tangents = (1.0, )`.
+
+2. compute `0.1411200080598672 (the output from stage 1) * 2.` with forward rule and compute the backward value with multiply backward rule of `sin(x) * 2.`. Inputs of backward are `primals = (0.1411200080598672 [sin(3)], 2.0)` and `tangents = (-0.9899924966004454 [1.0 * cos(3.0)], 0)`.
+
+3. compute `neg` (`-y` in the code) operator with stage 2 output and compute
+the backward value with `neg` backward rule. Inputs of backward are `primals = (0.2822400161197344, )` and `tangents = (-1.9799849932008908, )`.
+
+3. compute `add` (`z` in the code) operator with stage 3 output and compute
+the backward value with `add` backward rule. Inputs of backward are `primals = (-0.2822400161197344, 3.0)` and `tangents = (1.9799849932008908, 1.0)`.
+
+4. obtain the output `(2.7177599838802657 [forward], 2.979984993200891 [backward])`
+
+the code example from the Jax document is in the `jax-core/jax_core.py` you can debug for free.
+
+
+
+This is a good prototype for jax core implementation.
+- [autodidax](https://jax.readthedocs.io/en/latest/autodidax.html)
