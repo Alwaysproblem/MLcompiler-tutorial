@@ -169,6 +169,62 @@ the backward value with `add` backward rule. Inputs of backward are `primals = (
 
 the code example from the Jax document is in the `jax-core/jax_core.py` you can debug for free.
 
+## Jax for xla lowering cal stack
+
+```log
+python: ploy
+python: reraise_with_filtered_traceback{fun(*args, **kwargs)}
+c++: PjitFunction::Call
+python: cache_miss
+python: _python_pjit_helper
+python: pjit_p.bind
+python: bind_with_trace
+python: process_primitive # this is the calculation implementation of primitive.
+python: _pjit_call_impl
+python: xc._xla.pjit # this is the xla lowering cal stack.
+c++: PjitFunction::Call
+python: call_impl_cache_miss
+python: _pjit_call_impl_python # the jaxpr is lowering to xla and compiled to xla executable.
+
+{ #### this is the xla lowering call stack.
+  python: _pjit_lower
+  python: _pjit_lower_cached
+  python: pxla.lower_sharding_computation {func(*args, **kwargs)}
+  python: lower_sharding_computation
+  python: _cached_lowering_to_hlo
+  python: mlir.lower_jaxpr_to_module
+  python: mlir.lower_jaxpr_to_fun
+  python: jaxpr_subcomp # Lowers a jaxpr into MLIR, inlined into an existing function.
+  python: _nary_lower_hlo # Lowers an elementwise operator to its MLIR equivalent.
+} -> jaxpr to stablehlo
+
+{  #### compile lowering stablehlo to xla executable (xla hloModule).
+  python: compile
+  python: UnloadedMeshExecutable.from_hlo
+  python: _cached_compilation {xla_bridge}
+  python: dispatch.compile_or_get_cached
+  python: compile_or_get_cached
+  python: backend_compile
+  python: backend.compile # (self: jaxlib.xla_extension.Client, computation: str, compile_options: jaxlib.xla_extension.CompileOptions = <jaxlib.xla_extension.CompileOptions object at 0x7f8b68829570>, host_callbacks: List[capsule] = []) -> xla::PyLoadedExecutable
+  c++: PyClient::Compile (external/xla/xla/python/xla.cc)
+}
+
+{ #### xla executable run
+  python: executable.unsafe_call
+  python: self.xla_executable.execute_sharded(input_bufs)
+  c++: PyLoadedExecutable::ExecuteSharded (external/xla/xla/python/xla.cc)
+  python: results.consume_with_handlers(self.out_handler.handlers)
+  c++: PyExecuteResults::ConsumeWithHandlers(std::move(out_handlers)) (external/xla/xla/python/xla.cc)
+  # note return fastdatapath in order to call fast (this is cache)
+}
+
+```
+
+in the function [`lower_sharding_computation`](jax/_src/interpreters/pxla.py#L1965-L1966)
+
+1. Lowers a computation to XLA. It can take arbitrary shardings as input.
+-> jaxlib.xla_extension.Client and get device assignment.
+2. Build stableHLO (lowering Jaxpr to MLIR)
 
 
 This is a good prototype for jax core implementation.
