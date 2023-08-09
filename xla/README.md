@@ -229,3 +229,9 @@ in the function [`lower_sharding_computation`](jax/_src/interpreters/pxla.py#L19
 
 This is a good prototype for jax core implementation.
 - [autodidax](https://jax.readthedocs.io/en/latest/autodidax.html)
+
+<!--- TODO: 
+1. look into the Cpp part for xla compile and xla run. 
+2. see through those functions decorated with jit.
+3. check the call stack of the cache xla executable called. 
+------>
