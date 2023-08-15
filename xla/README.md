@@ -264,6 +264,36 @@ python: DynamicJaxprTrace.process_primitive # this is the calculation implementa
 
 `_read_most_recent_pjit_call_executable` function will return a cached function for a single operation without jit mode.
 
+### DFS for the pjit travel
+
+```python
+def toy(x):  # Define a function
+  y = jnp.exp(-2.0 * x)
+  return y ** 2
+
+jit_toy = jit(toy)  # Compile the function
+```
+
+```log
+
+python: jit
+python: pjit_info
+python: infer_params
+python: _create_pjit_expr
+python: trace_to_jaxpr_dynamic
+python: trace_to_subjaxpr_dynamic
+python: fun.call_wrapped
+python: self.f # toy function in code.
+  python: the "*" operator in `-2.0 * x`
+  python: infer_params # here is the recursive but the operator is mul not pjit.
+    ...
+  python: self.f # here is the jax multiply
+    ...
+  # recursive until to the last operator. It is like the DFS travel expression tree.
+  # after recursive, the jaxpr will be created.
+```
+
+
 ## Jax lowering pass
 
 ```mermaid
