@@ -32,7 +32,7 @@ TensorFlow在XLA中JIT编译后调用编译函数并获取结果的主要步骤�
 - https://zhuanlan.zhihu.com/p/397327235
 - https://zhuanlan.zhihu.com/p/427444916
 
-## build openxla env (not successful)
+## Build openxla env (not successful)
 
 ```bash
 # gcc-9, bazel
@@ -41,7 +41,7 @@ conda create -n tf2-build python=3.10 requests numpy wheel build -c conda-forge 
 
 [build from source](https://github.com/openxla/xla/blob/main/docs/build_from_source.md)
 
-## build Tensorflow 2 env
+## Build Tensorflow 2 env
 
 ```bash
 conda create -n tf2-build python=3.10 requests numpy wheel build -c conda-forge  -y
@@ -51,13 +51,14 @@ bazel build //tensorflow/tools/pip_package:build_pip_package
 
 [build from source](https://www.tensorflow.org/install/source?hl=zh-cn)
 
-## build jax env
+## Build jax env
 
 we can install the dependencies with conda
 
 ```bash
 # gcc-9, bazel
 conda create -n jax-build python=3.10 numpy wheel build -c conda-forge  -y
+python build/build.py --editable --configure_only --bazel_options=--config=debug_symbols
 bazel run --color auto //jaxlib/tools:build_wheel -- --output_path <dir> --cpu=x86_64 --editable
 ```
 
@@ -169,7 +170,7 @@ the backward value with `add` backward rule. Inputs of backward are `primals = (
 
 the code example from the Jax document is in the `jax-core/jax_core.py` you can debug for free.
 
-## Jax for xla lowering cal stack
+## Jax (not with jit) for xla lowering call stack
 
 ```log
 python: ploy
@@ -179,7 +180,11 @@ python: cache_miss
 python: _python_pjit_helper
 python: pjit_p.bind
 python: bind_with_trace
-python: process_primitive # this is the calculation implementation of primitive.
+{ ### EvalTracer
+  python: full_raise
+  python: self.pure
+}
+python: EvalTracer.process_primitive # this is the calculation implementation of primitive.
 python: _pjit_call_impl
 python: xc._xla.pjit # this is the xla lowering cal stack.
 c++: PjitFunction::Call
@@ -222,16 +227,57 @@ python: _pjit_call_impl_python # the jaxpr is lowering to xla and compiled to xl
 
 in the function [`lower_sharding_computation`](jax/_src/interpreters/pxla.py#L1965-L1966)
 
-1. Lowers a computation to XLA. It can take arbitrary shardings as input.
--> jaxlib.xla_extension.Client and get device assignment.
+1. Lowers a computation to XLA. It can take arbitrary shardings as input
+-> `jaxlib.xla_extension.Client` and get device assignment.
 2. Build stableHLO (lowering Jaxpr to MLIR)
+3. Compile stableHLO to XLA executable (xla hloModule)
+4. Run the XLA executable
 
-
-This is a good prototype for jax core implementation.
+This is a good prototype for jax core implementation from jax website.
 - [autodidax](https://jax.readthedocs.io/en/latest/autodidax.html)
 
-<!--- TODO: 
-1. look into the Cpp part for xla compile and xla run. 
+
+## Jax (with jit) for xla lowering call stack
+
+```log
+python: ploy
+python: reraise_with_filtered_traceback{fun(*args, **kwargs)}
+c++: PjitFunction::Call
+python: cache_miss
+python: _python_pjit_helper
+{
+  python: infer_params
+  # `infer_params` func. It is different with not jit.
+  # This will change the input into placeholder.
+  # this func will registed during the `jit` decorator.
+  # and set the `inline = True` for jit mode.
+  # Note: for non-jit mode, the `inline = False`.
+}
+python: pjit_p.bind
+python: bind_with_trace
+python: DynamicJaxprTrace.process_primitive # this is the calculation implementation of primitive.
+{
+  python: pjit_staging_rule
+} after this the `process_primitive` will return a placeholder instead of a value.
+
+```
+
+`_read_most_recent_pjit_call_executable` function will return a cached function for a single operation without jit mode.
+
+## Jax lowering pass
+
+```mermaid
+graph TD;
+  A(python) --> B(jaxpr);
+  B --> C(stablehlo);
+  C --> D(mhlo);
+  D --> E(xla HloModule);
+  E --> F(xla executable);
+```
+
+
+<!--- TODO:
+1. look into the Cpp part for xla compile and xla run.
 2. see through those functions decorated with jit.
-3. check the call stack of the cache xla executable called. 
+3. check the call stack of the cache xla executable called.
 ------>
