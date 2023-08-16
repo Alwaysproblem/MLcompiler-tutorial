@@ -293,7 +293,6 @@ python: self.f # toy function in code.
   # after recursive, the jaxpr will be created.
 ```
 
-
 ## Jax lowering pass
 
 ```mermaid
@@ -305,9 +304,82 @@ graph TD;
   E --> F(xla executable);
 ```
 
+## Jax calling the cached xla funcion with `xla_extension.PjitFuncion`
+
+Jax will regested the python callable object through the `jax::BuildPjitSubmodule(m)`
+which is in the `xla_extension.so` file. you can specify the `PYTHONPATH` to the parent directory of the `xla_extension.so` file.
+After that, you can import xla_extension module in python console.
+
+The `xla_extension.PjitFunction` is a python callable object implemented by C++ function. This is decribed in the `xla/xla/python/pjit.cc` file.
+
+The cached pjit function will be compiled during the first call and the decorated function will be converted into pybind cpp function.
+by doing this, the input will directly pass to the function that is allocated with python heap by pybind framework.
+
+```c++
+    PyTypeObject* type = &heap_type->ht_type;
+    type->tp_name = "PjitFunction";
+    ...
+    type->tp_new = PjitFunction_tp_new;
+    type->tp_dealloc = PjitFunction_tp_dealloc;
+    type->tp_dictoffset = offsetof(PjitFunctionObject, dict);
+    type->tp_traverse = PjitFunction_tp_traverse;
+    type->tp_clear = PjitFunction_tp_clear;
+    type->tp_weaklistoffset = offsetof(PjitFunctionObject, weakrefs);
+    type->tp_getset = PjitFunction_tp_getset;
+    type->tp_descr_get = PjitFunction_tp_descr_get;
+    type->tp_call = PyVectorcall_Call;
+    type->tp_vectorcall_offset = offsetof(PjitFunctionObject, vectorcall);
+    type->tp_repr = PjitFunction_tp_repr;
+```
+
+
+```c++
+PyObject* PjitFunction_tp_new(PyTypeObject* subtype, PyObject* args,
+                              PyObject* kwds) {
+  PjitFunctionObject* self =
+      reinterpret_cast<PjitFunctionObject*>(subtype->tp_alloc(subtype, 0));
+  if (!self) return nullptr;
+  self->dict = nullptr;
+  self->weakrefs = nullptr;
+  self->vectorcall = PjitFunction_tp_vectorcall;
+  return reinterpret_cast<PyObject*>(self);
+}
+```
+The `tp_new` function will be called when the `PjitFunction` object is created.
+The `PjitFunction_tp_vectorcall` function will be set to the `self->vectorcall` offset.
+This is the reason why `type->tp_vectorcall_offset = offsetof(PjitFunctionObject, vectorcall)`.
+This will redirect to the `PjitFunction_tp_vectorcall`
+
+```cpp
+PyObject* PjitFunction_tp_vectorcall(PyObject* callable, PyObject* const* args,
+                                     size_t nargs, PyObject* kwnames) {
+  PjitFunctionObject* o = reinterpret_cast<PjitFunctionObject*>(callable);
+  tsl::profiler::TraceMe traceme([&] {
+    return absl::StrCat("PjitFunction(", o->fun.function_name(), ")");
+  });
+  try {
+    xla::StatusOr<py::object> out = o->fun.Call(callable, args, nargs, kwnames); // this is the cached function.
+    if (!out.ok()) {
+      PyErr_SetString(PyExc_ValueError, out.status().ToString().c_str());
+      return nullptr;
+    }
+    return out.value().release().ptr();
+  } catch (py::error_already_set& e) {
+    e.restore();
+    return nullptr;
+  } catch (py::cast_error& e) {
+    PyErr_SetString(PyExc_ValueError, e.what());
+    return nullptr;
+  } catch (std::invalid_argument& e) {
+    PyErr_SetString(PyExc_ValueError, e.what());
+    return nullptr;
+  } catch (std::runtime_error& e) {
+    PyErr_SetString(PyExc_ValueError, e.what());
+    return nullptr;
+  }
+}
+```
 
 <!--- TODO:
 1. look into the Cpp part for xla compile and xla run.
-2. see through those functions decorated with jit.
-3. check the call stack of the cache xla executable called.
 ------>
