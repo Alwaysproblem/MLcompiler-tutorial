@@ -35,8 +35,11 @@ TensorFlow在XLA中JIT编译后调用编译函数并获取结果的主要步骤�
 ## Build openxla env (not successful)
 
 ```bash
-# gcc-9, bazel
+# gcc-10, bazel
 conda create -n tf2-build python=3.10 requests numpy wheel build -c conda-forge  -y
+bazel build --test_output=all --spawn_strategy=sandboxed //xla/...
+# This will build static library. You can try this when shared library build failed.
+# bazel build --define=framework_shared_object=1 --test_output=all --spawn_strategy=sandboxed //xla/...
 ```
 
 [build from source](https://github.com/openxla/xla/blob/main/docs/build_from_source.md)
@@ -51,7 +54,9 @@ bazel build //tensorflow/tools/pip_package:build_pip_package
 
 [build from source](https://www.tensorflow.org/install/source?hl=zh-cn)
 
-## Build jax env
+## JAX
+
+### Build jax env
 
 we can install the dependencies with conda
 
@@ -64,14 +69,18 @@ bazel run --color auto //jaxlib/tools:build_wheel -- --output_path <dir> --cpu=x
 
 [build from source](https://jax.readthedocs.io/en/latest/developer.html)
 
-## Logging
+### vscode setting json
+
+You can found the json files in `vscode/jax`
+
+### Logging
 
 - TF_CPP_MIN_LOG_LEVEL: Level to print messages for. TF_CPP_MIN_LOG_LEVEL=0 will turn on INFO logging, TF_CPP_MIN_LOG_LEVEL=1 WARNING and so on.
 - TF_CPP_MAX_VLOG_LEVEL=10
 - TF_CPP_VMODULE='pjit=10' will print `external/xla/xla/python/pjit.cc` vlog. I assume that `pjit` is the file name of the module.
 - `TF_CPP_MAX_VLOG_LEVEL=10 TF_CPP_MIN_LOG_LEVEL=0 python test.py` will print all logs.
 
-## Jax AutoDiff takeaways
+### Jax AutoDiff takeaways
 
 I will take an code below as a example to explain how jax autodiff works.
 
@@ -96,17 +105,12 @@ then $f'(x) = g'(h(x)) * h'(x)$
 
 Where:
 
-$f(x)$ is the composite function
-
-$g(x)$ is the outer function
-
-$h(x)$ is the inner function
-
-$f'(x)$  is the derivative of $f(x)$
-
-$g'(x)$  is the derivative of $g(x)$
-
-$h'(x)$  is the derivative of $h(x)$
+- $f(x)$ is the composite function
+- $g(x)$ is the outer function
+- $h(x)$ is the inner function
+- $f'(x)$  is the derivative of $f(x)$
+- $g'(x)$  is the derivative of $g(x)$
+- $h'(x)$  is the derivative of $h(x)$
 
 when you exhausted the end of backward pass, you will find all the derivative formular will be like:
 
@@ -170,7 +174,7 @@ the backward value with `add` backward rule. Inputs of backward are `primals = (
 
 the code example from the Jax document is in the `jax-core/jax_core.py` you can debug for free.
 
-## Jax (not with jit) for xla lowering call stack
+### Jax (not with jit) for xla lowering call stack
 
 ```log
 python: ploy
@@ -237,7 +241,7 @@ This is a good prototype for jax core implementation from jax website.
 - [autodidax](https://jax.readthedocs.io/en/latest/autodidax.html)
 
 
-## Jax (with jit) for xla lowering call stack
+### Jax (with jit) for xla lowering call stack
 
 ```log
 python: ploy
@@ -264,7 +268,7 @@ python: DynamicJaxprTrace.process_primitive # this is the calculation implementa
 
 `_read_most_recent_pjit_call_executable` function will return a cached function for a single operation without jit mode.
 
-### DFS for the pjit travel
+### DFS for the `pjit` travel
 
 ```python
 def toy(x):  # Define a function
@@ -293,7 +297,7 @@ python: self.f # toy function in code.
   # after recursive, the jaxpr will be created.
 ```
 
-## Jax lowering pass
+### Jax lowering pass
 
 ```mermaid
 graph TD;
@@ -304,7 +308,7 @@ graph TD;
   E --> F(xla executable);
 ```
 
-## Jax calling the cached xla funcion with `xla_extension.PjitFuncion`
+### Jax calling the cached xla funcion with `xla_extension.PjitFuncion`
 
 Jax will regested the python callable object through the `jax::BuildPjitSubmodule(m)`
 which is in the `xla_extension.so` file. you can specify the `PYTHONPATH` to the parent directory of the `xla_extension.so` file.
@@ -331,7 +335,6 @@ by doing this, the input will directly pass to the function that is allocated wi
     type->tp_vectorcall_offset = offsetof(PjitFunctionObject, vectorcall);
     type->tp_repr = PjitFunction_tp_repr;
 ```
-
 
 ```c++
 PyObject* PjitFunction_tp_new(PyTypeObject* subtype, PyObject* args,
