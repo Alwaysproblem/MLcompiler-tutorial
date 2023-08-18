@@ -1,0 +1,20 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "includePath": [
+                // "/usr/local/include",
+                // "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/",
+                // "${workspaceFolder}",
+                // "${workspaceFolder}/bazel-cpp-vscode-template/external/com_google_googletest/googletest/include"
+            ],
+            "cppStandard": "c++17",
+            "cStandard": "c17",
+            "defines": [],
+            "intelliSenseMode": "${default}",
+            "compilerPath": "/usr/bin/gcc",
+            "compileCommands": "${workspaceFolder}/compile_commands.json"
+        }
+    ],
+    "version": 4
+}
