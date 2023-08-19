@@ -44,6 +44,14 @@ bazel build --test_output=all --spawn_strategy=sandboxed //xla/...
 
 [build from source](https://github.com/openxla/xla/blob/main/docs/build_from_source.md)
 
+## setup develop enviornment
+
+```bash
+cd openxla
+ln -s xla/.clang-format .clang-format
+cp -R ../vscode/openxla/vscode ./vscode
+```
+
 ## Build Tensorflow 2 env
 
 ```bash
