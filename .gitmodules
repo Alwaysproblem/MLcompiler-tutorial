@@ -11,3 +11,6 @@
 [submodule "xla/openxla"]
 	path = xla/openxla
 	url = https://github.com/openxla/xla
+[submodule "torch/pytorch"]
+	path = torch/pytorch
+	url = https://github.com/pytorch/pytorch
