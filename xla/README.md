@@ -391,5 +391,6 @@ PyObject* PjitFunction_tp_vectorcall(PyObject* callable, PyObject* const* args,
 }
 ```
 
-<!--- TODOlook into the Cpp part for xla compile and xla run.
+<!--- TODO:
+1. look into the Cpp part for xla compile and xla run.
 ------>
