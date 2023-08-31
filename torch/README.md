@@ -23,6 +23,22 @@ cp -r vscode/pytorch/vscode/ pytorch/.vscode/
 
 trace (standalone function) -> ScriptFunction
 # python: torch.jit.trace
+# cpp: _create_function_from_trace
+{
+  # cpp: toTraceableStack # this will change the input into c10::IValue
+  # cpp: tracer::createGraphByTracing
+  {
+    # cpp: tracer::trace ->
+    {
+      # build graph
+      # trace the decorated funcion with `trace_fn`
+      # and get local and global env variable with
+      # inspect python package.
+    }
+  }
+  # cpp: cu->create_function -> GraphFuncion
+  # registed the `function ptr` and `compilation unit`
+}
 
 
 run (ScriptFunction) -> torch.Tensor
@@ -82,6 +98,7 @@ PYTORCH_JIT_LOG_LEVEL='>>dead_code_elimination' python pytorch-test/aa.py
 # debug Stack
 # -exec call ((c10::IValue *)<>)->dump()
 -exec call ((c10::IValue *)stack._M_impl._M_start)->dump()
+-exec call graph->dump()
 ```
 
 Reference:
