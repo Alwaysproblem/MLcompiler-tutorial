@@ -1,0 +1,13 @@
+[
+  {
+    "name": "Cmake Conda",
+    "compilers": {
+      "C": "/usr/bin/gcc",
+      "CXX": "/usr/bin/g++"
+    },
+    "environmentSetupScript": "${workspaceFolder}/.vscode/.envsetup.sh",
+    "preferredGenerator": {
+      "name": "Ninja"
+    }
+  }
+]

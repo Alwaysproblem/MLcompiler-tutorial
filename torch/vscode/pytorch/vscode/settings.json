@@ -1,0 +1,29 @@
+{
+  "[python]": {
+      "editor.tabSize": 4
+  },
+  "files.associations": {
+      "*.py.in": "python",
+      "*.pyi.in": "python",
+      "editor.defaultFormatter": "omnilib.ufmt"
+  },
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+  "files.trimTrailingWhitespace": true,
+  "python.formatting.provider": "none",
+  "python.linting.enabled": true,
+  "python.linting.flake8Enabled": true,
+  "cmakeFormat.args": ["--config=${workspaceFolder}/.cmake-lint.yaml"],
+  "cmake.buildArgs": [
+  ],
+  "cmake.debugConfig": {
+    // "args": [
+    // ],
+    // "cwd": "${workspaceFolder}/src",
+  },
+  "cmake.buildDirectory": "${workspaceFolder}/.vscode/build",
+  "cmake.configureArgs": [],
+  "cmake.cmakePath": "${env.HOME}/anaconda3/envs/pytorch-build/bin/cmake",
+  "git.ignoreLimitWarning": true,
+}
