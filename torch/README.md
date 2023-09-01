@@ -239,13 +239,14 @@ PYTORCH_JIT_LOG_LEVEL='>>dead_code_elimination' python pytorch-test/aa.py
         }
 
         # after the getOptimization plan
+        # ---------- original graph ---------
         #-- graph(%a.1 : Tensor,
         #--       %b.1 : Tensor):
         #--   %2 : int = prim::Constant[value=1]()
         #--   %c.1 : Tensor = aten::add(%a.1, %b.1, %2) # /root/Desktop/dockerVolumn/MLcompiler-tutorial/torch/pytorch/pytorch-test/aa.py:9:6
         #--   %d.1 : Tensor = aten::mul(%c.1, %c.1) # /root/Desktop/dockerVolumn/MLcompiler-tutorial/torch/pytorch/pytorch-test/aa.py:10:6
         #--   return (%d.1)
-
+        # ---------- profiling graph ---------
         #-- graph(%a.1 : Tensor,
         #--       %b.1 : Tensor):
         #--   %2 : int = prim::Constant[value=1]()
