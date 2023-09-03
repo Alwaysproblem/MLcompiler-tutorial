@@ -987,3 +987,6 @@ Reference:
 - https://peps.python.org/pep-0523/#:~:text=By%20default%2C%20the%20eval_frame%20field,the%20execution%20of%20Python%20code.
 - https://tenthousandmeters.com/blog/python-behind-the-scenes-1-how-the-cpython-vm-works/
 - https://tenthousandmeters.com/blog/python-behind-the-scenes-4-how-python-bytecode-is-executed/
+- https://pytorch.org/docs/stable/dynamo/index.html
+- https://pytorch.org/docs/stable/dynamo/guards-overview.html
+- https://www.youtube.com/watch?v=egZB5Uxki0I
