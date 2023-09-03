@@ -926,6 +926,64 @@ by `transform_code_object` , the code instruction will be:
              10 RETURN_VALUE
 ```
 
+### Cpython eval frame ptr substitution
+
+the takeaway of this is within the function named `torch._dynamo`
+
+the python frame evaluation function ptr can be change described in the PEP0523.
+
+`dynamo` change the evaluation function implementaion by the `_PyInterpreterState_SetEvalFrameFunc`. the `_PyInterpreterState_SetEvalFrameFunc` is from the cpython api to registed the custom evaluation function implementaion to evaluate the `WrapperCodeCache` which is the compiled `fx.GraphModule` cache.
+
+When python VM call the eval function, it will call the custom implementataion.
+
+In python level code, the `set_eval_frame` registed by `set_eval_frame` in the `torch/csrc/dynamo/eval_frame.c:1059` and `increment_working_threads` call the `_PyInterpreterState_SetEvalFrameFunc` enrollment.
+
+the functionality of `set_eval_frame` is:
+
+if there is compiled cache code object, setting the custom evaluate function
+else run by native python methods.
+
+when the custom evaluate function, the first thing that it does is checking the exsist cache.
+
+### Compile decorator
+
+The `compile` decorator will regist the callback, which can change the python frame and subsitution of `code` python object. However, the `compile` do not compile the function. the compilation will be executed in the first function call.
+
+## example of torch fx interpreter
+
+```python
+import torch
+from torch.fx import Interpreter
+
+class NegSigmSwapInterpreter(Interpreter):
+    def call_function(self, target,
+                        args, kwargs):
+        if target == torch.sigmoid:
+            return torch.neg(*args, **kwargs)
+        return super().call_function(target)
+
+    def call_method(self, target,
+                    args, kwargs):
+        if target == 'neg':
+            call_self, *args_tail = args
+            return call_self.sigmoid(*args_tail, **kwargs)
+        return super().call_method(target)
+
+def fn(x):
+    return torch.sigmoid(x).neg()
+
+gm = torch.fx.symbolic_trace(fn)
+print(gm.print_readable())
+input = torch.randn(3, 4)
+result = NegSigmSwapInterpreter(gm).run(input)
+
+print(result)
+print(torch.neg(input).sigmoid())
+```
+
 Reference:
 
 - https://github.com/pytorch/pytorch/blob/main/torch/csrc/jit/OVERVIEW.md#jit-logging
+- https://peps.python.org/pep-0523/#:~:text=By%20default%2C%20the%20eval_frame%20field,the%20execution%20of%20Python%20code.
+- https://tenthousandmeters.com/blog/python-behind-the-scenes-1-how-the-cpython-vm-works/
+- https://tenthousandmeters.com/blog/python-behind-the-scenes-4-how-python-bytecode-is-executed/
