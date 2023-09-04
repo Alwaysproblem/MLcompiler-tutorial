@@ -2,14 +2,43 @@
 
 ## Build from source
 
+Prerequisites:
+
+If you are installing from source, you will need:
+
+- Python 3.8 or later (for Linux, Python 3.8.1+ is needed)
+- A compiler that fully supports C++17, such as clang or gcc (especially for aarch64, gcc 9.4.0 or newer is required)
+
 ```bash
 # gcc-10, bazel
-conda create -n tf2-build python=3.10 requests numpy wheel build -c conda-forge  -y
+conda create -n pytorch-build python=3.9 -c conda-forge  -y
 
+# (optional) formatter and linter
+conda install pylint yapf clang-tools clang-format -c conda-forge -y
+
+conda install cmake ninja -c conda-forge -y
+
+pip install -r requirements.txt
+
+conda install mkl mkl-include -y
+# CUDA only: Add LAPACK support for the GPU if needed
+conda install -c pytorch magma-cuda110  # or the magma-cuda* that matches your CUDA version from https://anaconda.org/pytorch/repo
+
+# (optional) If using torch.compile with inductor/triton, install the matching version of triton
+# Run from the pytorch directory after cloning
+make triton
+
+git clone --recursive https://github.com/pytorch/pytorch
+cd pytorch
+# if you are updating an existing checkout
+git submodule sync
+git submodule update --init --recursive
+
+export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
 DEBUG=1 USE_DISTRIBUTED=0 USE_MKLDNN=0 USE_CUDA=0 BUILD_TEST=0 USE_FBGEMM=0 USE_NNPACK=0 USE_QNNPACK=0 USE_XNNPACK=0 python setup.py develop # CPU debug version pytorch whl.
 ```
 
-[build from source](https://github.com/openxla/xla/blob/main/docs/build_from_source.md)
+[build from source](https://github.com/pytorch/pytorch#installation)
 
 ## Env for debugging
 
