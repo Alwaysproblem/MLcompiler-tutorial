@@ -7,3 +7,7 @@
 ## XLA
 
 - [README.md](xla/README.md)
+
+## Torch
+
+- [README.md](torch/README.md)
