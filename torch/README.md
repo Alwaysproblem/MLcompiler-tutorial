@@ -46,6 +46,38 @@ DEBUG=1 USE_DISTRIBUTED=0 USE_MKLDNN=0 USE_CUDA=0 BUILD_TEST=0 USE_FBGEMM=0 USE_
 cp -r vscode/pytorch/vscode/ pytorch/.vscode/
 ```
 
+## Pytorch Eager Mode
+
+We take the `neg` as example
+
+```
+# python: neg
+# cpp: PyObject * THPVariable_neg(PyObject* self_, PyObject* args)
+{
+  # cpp: Tensor::neg()
+  # cpp: at::_ops::neg::call [build/aten/src/ATen/Operators_0.cpp:5365 {this is generated cpp file}]
+  {
+    # cpp: Return Dispatcher::call [/usr/local/include/ATen/core/dispatch/Dispatcher.h:657]
+    {
+      # cpp: Return KernelFunction::call [/usr/local/include/ATen/core/boxing/KernelFunction_impl.h:107]
+      {
+        # cpp: boxed_kernel_func.callBoxed [/usr/local/include/ATen/core/boxing/impl/boxing.h:231]
+        {
+          # cpp: inline void BoxedKernel::callBoxed
+          # here will call the registered KernelFunction
+          # the method of registration is in the reference list below.
+        }
+      }
+    }
+  }
+}
+
+```
+
+- https://pytorch.org/tutorials/advanced/extend_dispatcher.html
+- https://pytorch.org/tutorials/advanced/dispatcher
+- https://blog.csdn.net/Chris_zhangrx/article/details/119512418
+
 ## Pytorch Jit trace
 
 ```txt
