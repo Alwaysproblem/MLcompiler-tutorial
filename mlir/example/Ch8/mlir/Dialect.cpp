@@ -417,6 +417,62 @@ mlir::LogicalResult TransposeOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
+// MatMulOp
+//===----------------------------------------------------------------------===//
+
+void MatMulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
+                     mlir::Value lhs, mlir::Value rhs) {
+  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
+  state.addOperands({lhs, rhs});
+}
+
+// mlir::ParseResult MatMulOp::parse(mlir::OpAsmParser &parser,
+//                                mlir::OperationState &result) {
+//   return parseBinaryOp(parser, result);
+// }
+
+// void MatMulOp::print(mlir::OpAsmPrinter &p) { printBinaryOp(p, *this); }
+
+mlir::LogicalResult MatMulOp::verify() {
+  auto lhsType = getLhs().getType().dyn_cast<RankedTensorType>();
+  auto rhsType = getRhs().getType().dyn_cast<RankedTensorType>();
+  auto resultType = getType().dyn_cast<RankedTensorType>();
+
+  if (!lhsType || !rhsType || !resultType) return mlir::success();
+
+  auto lhsShape = lhsType.getShape();
+  auto rhsShape = rhsType.getShape();
+
+  if (lhsShape.size() != 2 || rhsShape.size() != 2) {
+    return emitOpError() << "expected 2D matrix";
+  }
+
+  if (lhsShape[1] != rhsShape[0]) {
+    return emitOpError() << "expected dimension to match"
+                         << "the shape of lhs is [" << lhsShape[0] << ", "
+                         << lhsShape[1] << "] "
+                         << "the shape of rhs is [" << rhsShape[0] << ", "
+                         << rhsShape[1] << "] "
+                         << "but the dimension " << lhsShape[1]
+                         << "!=" << rhsShape[0] << '\n';
+  }
+
+  return mlir::success();
+}
+
+/// Infer the output shape of the MatMulOp, this is required by the shape
+/// inference interface.
+void MatMulOp::inferShapes() {
+  RankedTensorType lhsType = getLhs().getType().cast<RankedTensorType>();
+  RankedTensorType rhsType = getRhs().getType().cast<RankedTensorType>();
+  auto lhsShape = lhsType.getShape();
+  auto rhsShape = rhsType.getShape();
+  RankedTensorType res_type = RankedTensorType::get({lhsShape[0], rhsShape[1]},
+                                                    lhsType.getElementType());
+  getResult().setType(res_type);
+}
+
+//===----------------------------------------------------------------------===//
 // TableGen'd op method definitions
 //===----------------------------------------------------------------------===//
 
