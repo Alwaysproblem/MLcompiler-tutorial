@@ -426,13 +426,6 @@ void MatMulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
   state.addOperands({lhs, rhs});
 }
 
-// mlir::ParseResult MatMulOp::parse(mlir::OpAsmParser &parser,
-//                                mlir::OperationState &result) {
-//   return parseBinaryOp(parser, result);
-// }
-
-// void MatMulOp::print(mlir::OpAsmPrinter &p) { printBinaryOp(p, *this); }
-
 mlir::LogicalResult MatMulOp::verify() {
   auto lhsType = getLhs().getType().dyn_cast<RankedTensorType>();
   auto rhsType = getRhs().getType().dyn_cast<RankedTensorType>();
