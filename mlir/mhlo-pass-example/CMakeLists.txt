@@ -10,10 +10,8 @@ project(mlir-example LANGUAGES C CXX)
 find_package(MHLO CONFIG REQUIRED)
 find_package(LLVM CONFIG REQUIRED)
 find_package(MLIR CONFIG REQUIRED)
-find_package(popir CONFIG REQUIRED)
-find_package(popit CONFIG REQUIRED)
-find_package(poplar CONFIG REQUIRED)
-find_package(popef CONFIG REQUIRED)
+# find_package(popir CONFIG REQUIRED) find_package(popit CONFIG REQUIRED)
+# find_package(poplar CONFIG REQUIRED) find_package(popef CONFIG REQUIRED)
 
 set(MLIR_TABLEGEN_EXE ${MLIR_TABLEGEN_EXEUTABLE})
 # ##############################################################################
@@ -50,6 +48,5 @@ include(AddLLVM)
 # note: fix the llvm::cl undefined reference problem
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fno-rtti")
 
-add_subdirectory(popit-example)
-add_subdirectory(mhlo-popir)
+# add_subdirectory(popit-example) add_subdirectory(mhlo-popir)
 add_subdirectory(mhlo_example)

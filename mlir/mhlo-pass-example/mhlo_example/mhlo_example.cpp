@@ -1,22 +1,13 @@
-// Copyright (c) 2023 Graphcore Ltd. All rights reserved.
-// SDK version: 4.0.0-EA.1+1470
-
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_ostream.h>
 #include <mhlo/IR/hlo_ops.h>
+#include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Parser/Parser.h>
 
 #include <iostream>
 #include <memory>
 #include <numeric>
-#include <popir/Compile.hpp>
-#include <popir/Context.hpp>
-#include <popir/dialect/phlo/PhloBuildUtils.hpp>
-#include <popir/dialect/popit/PopitDialect.hpp>
-#include <popir/poplar_lowering/PoplarLoweringContext.hpp>
-#include <popit/Device.hpp>
-#include <popit/popit.hpp>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -52,8 +43,7 @@ int main(int argc, char *argv[]) {
   std::string inputFilename = argv[1];
 
   mlir::MLIRContext context;
-  context.loadDialect<mlir::mhlo::MhloDialect, mlir::func::FuncDialect,
-                      mlir::phlo::PhloDialect, mlir::popit::PopitDialect>();
+  context.loadDialect<mlir::mhlo::MhloDialect, mlir::func::FuncDialect>();
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
   llvm::SourceMgr sourceMgr;

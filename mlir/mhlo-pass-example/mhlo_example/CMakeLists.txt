@@ -17,28 +17,4 @@ target_link_libraries(
           MLIRPass
           MLIRSideEffectInterfaces
           MLIRSupport
-          MLIRTransforms
-          MLIRPopopsExprDialect
-          MLIRSharedDialect
-          MLIRPoprandDialect
-          MLIRPopnnDialect
-          MLIRPoplayoutDialect
-          MLIRPopitTransforms
-          MLIRPoplarDialect
-          MLIRPopitDialect
-          MLIRPhloDialect
-          MLIRPoplarTransforms
-          MLIRPopopsDialect
-          MLIRPhloToPoplarConversion
-          MLIRPoplarConversionCommon
-          MLIRPhloTransforms
-          MLIRPoplinDialect
-          poplar
-          popit
-          pvti
-          popef
-          popops
-          poprand
-          popnn
-          poplin
-          popir)
+          MLIRTransforms)
