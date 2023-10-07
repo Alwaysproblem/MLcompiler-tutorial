@@ -22,7 +22,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/Sequence.h"
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
@@ -42,6 +41,7 @@
 #include "mlir/Transforms/DialectConversion.h"
 #include "toy/Dialect.h"
 #include "toy/Passes.h"
+#include "llvm/ADT/Sequence.h"
 
 using namespace mlir;
 
@@ -53,14 +53,14 @@ namespace {
 /// Lowers `toy.print` to a loop nest calling `printf` on each of the individual
 /// elements of the array.
 class PrintOpLowering : public ConversionPattern {
- public:
+public:
   explicit PrintOpLowering(MLIRContext *context)
       : ConversionPattern(toy::PrintOp::getOperationName(), 1, context) {}
 
-  LogicalResult matchAndRewrite(
-      Operation *op, ArrayRef<Value> operands,
-      ConversionPatternRewriter &rewriter) const override {
-    auto memRefType = (*op->operand_type_begin()).cast<MemRefType>();
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    auto memRefType = llvm::cast<MemRefType>((*op->operand_type_begin()));
     auto memRefShape = memRefType.getShape();
     auto loc = op->getLoc();
 
@@ -82,7 +82,8 @@ class PrintOpLowering : public ConversionPattern {
       auto step = rewriter.create<arith::ConstantIndexOp>(loc, 1);
       auto loop =
           rewriter.create<scf::ForOp>(loc, lowerBound, upperBound, step);
-      for (Operation &nested : *loop.getBody()) rewriter.eraseOp(&nested);
+      for (Operation &nested : *loop.getBody())
+        rewriter.eraseOp(&nested);
       loopIvs.push_back(loop.getInductionVar());
 
       // Terminate the loop body.
@@ -109,7 +110,7 @@ class PrintOpLowering : public ConversionPattern {
     return success();
   }
 
- private:
+private:
   /// Return a symbol reference to the printf function, inserting it into the
   /// module if necessary.
   static FlatSymbolRefAttr getOrInsertPrintf(PatternRewriter &rewriter,
@@ -160,7 +161,7 @@ class PrintOpLowering : public ConversionPattern {
         globalPtr, ArrayRef<Value>({cst0, cst0}));
   }
 };
-}  // namespace
+} // namespace
 
 //===----------------------------------------------------------------------===//
 // ToyToLLVMLoweringPass
@@ -176,7 +177,7 @@ struct ToyToLLVMLoweringPass
   }
   void runOnOperation() final;
 };
-}  // namespace
+} // namespace
 
 void ToyToLLVMLoweringPass::runOnOperation() {
   // The first thing to define is the conversion target. This will define the
@@ -204,7 +205,7 @@ void ToyToLLVMLoweringPass::runOnOperation() {
   populateAffineToStdConversionPatterns(patterns);
   populateSCFToControlFlowConversionPatterns(patterns);
   mlir::arith::populateArithToLLVMConversionPatterns(typeConverter, patterns);
-  populateMemRefToLLVMConversionPatterns(typeConverter, patterns);
+  populateFinalizeMemRefToLLVMConversionPatterns(typeConverter, patterns);
   cf::populateControlFlowToLLVMConversionPatterns(typeConverter, patterns);
   populateFuncToLLVMConversionPatterns(typeConverter, patterns);
 

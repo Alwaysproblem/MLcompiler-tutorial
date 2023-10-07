@@ -11,13 +11,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/raw_ostream.h"
 #include "mlir/Pass/Pass.h"
 #include "toy/Dialect.h"
 #include "toy/Passes.h"
 #include "toy/ShapeInferenceInterface.h"
+#include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
 
 #define DEBUG_TYPE "shape-inference"
 
@@ -55,7 +55,8 @@ struct ShapeInferencePass
     // these are operations that return a dynamic shape.
     llvm::SmallPtrSet<mlir::Operation *, 16> opWorklist;
     f.walk([&](mlir::Operation *op) {
-      if (returnsDynamicShape(op)) opWorklist.insert(op);
+      if (returnsDynamicShape(op))
+        opWorklist.insert(op);
     });
 
     // Iterate on the operations in the worklist until all operations have been
@@ -64,7 +65,8 @@ struct ShapeInferencePass
       // Find the next operation ready for inference, that is an operation
       // with all operands already resolved (non-generic).
       auto nextop = llvm::find_if(opWorklist, allOperandsInferred);
-      if (nextop == opWorklist.end()) break;
+      if (nextop == opWorklist.end())
+        break;
 
       Operation *op = *nextop;
       opWorklist.erase(op);
@@ -74,9 +76,8 @@ struct ShapeInferencePass
       if (auto shapeOp = dyn_cast<ShapeInference>(op)) {
         shapeOp.inferShapes();
       } else {
-        op->emitError(
-            "unable to infer shape of operation without shape "
-            "inference interface");
+        op->emitError("unable to infer shape of operation without shape "
+                      "inference interface");
         return signalPassFailure();
       }
     }
@@ -93,7 +94,7 @@ struct ShapeInferencePass
   /// operands inferred.
   static bool allOperandsInferred(Operation *op) {
     return llvm::all_of(op->getOperandTypes(), [](Type operandType) {
-      return operandType.isa<RankedTensorType>();
+      return llvm::isa<RankedTensorType>(operandType);
     });
   }
 
@@ -101,11 +102,11 @@ struct ShapeInferencePass
   /// shaped result.
   static bool returnsDynamicShape(Operation *op) {
     return llvm::any_of(op->getResultTypes(), [](Type resultType) {
-      return !resultType.isa<RankedTensorType>();
+      return !llvm::isa<RankedTensorType>(resultType);
     });
   }
 };
-}  // namespace
+} // namespace
 
 /// Create a Shape Inference pass.
 std::unique_ptr<mlir::Pass> mlir::toy::createShapeInferencePass() {

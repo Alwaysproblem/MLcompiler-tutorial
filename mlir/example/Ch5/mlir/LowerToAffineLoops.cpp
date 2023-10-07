@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/Sequence.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -22,6 +21,7 @@
 #include "mlir/Transforms/DialectConversion.h"
 #include "toy/Dialect.h"
 #include "toy/Passes.h"
+#include "llvm/ADT/Sequence.h"
 
 using namespace mlir;
 
@@ -29,9 +29,8 @@ using namespace mlir;
 // ToyToAffine RewritePatterns
 //===----------------------------------------------------------------------===//
 
-/// Convert the given TensorType into the corresponding MemRefType.
-static MemRefType convertTensorToMemRef(TensorType type) {
-  assert(type.hasRank() && "expected only ranked shapes");
+/// Convert the given RankedTensorType into the corresponding MemRefType.
+static MemRefType convertTensorToMemRef(RankedTensorType type) {
   return MemRefType::get(type.getShape(), type.getElementType());
 }
 
@@ -62,7 +61,7 @@ using LoopIterationFn = function_ref<Value(
 static void lowerOpToLoops(Operation *op, ValueRange operands,
                            PatternRewriter &rewriter,
                            LoopIterationFn processIteration) {
-  auto tensorType = (*op->result_type_begin()).cast<TensorType>();
+  auto tensorType = llvm::cast<RankedTensorType>((*op->result_type_begin()));
   auto loc = op->getLoc();
 
   // Insert an allocation and deallocation for the result of this operation.
@@ -75,14 +74,15 @@ static void lowerOpToLoops(Operation *op, ValueRange operands,
   // loop induction variables.
   SmallVector<int64_t, 4> lowerBounds(tensorType.getRank(), /*Value=*/0);
   SmallVector<int64_t, 4> steps(tensorType.getRank(), /*Value=*/1);
-  buildAffineLoopNest(
+  affine::buildAffineLoopNest(
       rewriter, loc, lowerBounds, tensorType.getShape(), steps,
       [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
         // Call the processing function with the rewriter, the memref operands,
         // and the loop induction variables. This function will return the value
         // to store at the current index.
         Value valueToStore = processIteration(nestedBuilder, operands, ivs);
-        nestedBuilder.create<AffineStoreOp>(loc, valueToStore, alloc, ivs);
+        nestedBuilder.create<affine::AffineStoreOp>(loc, valueToStore, alloc,
+                                                    ivs);
       });
 
   // Replace this operation with the generated alloc.
@@ -99,9 +99,9 @@ struct BinaryOpLowering : public ConversionPattern {
   BinaryOpLowering(MLIRContext *ctx)
       : ConversionPattern(BinaryOp::getOperationName(), 1, ctx) {}
 
-  LogicalResult matchAndRewrite(
-      Operation *op, ArrayRef<Value> operands,
-      ConversionPatternRewriter &rewriter) const final {
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const final {
     auto loc = op->getLoc();
     lowerOpToLoops(op, operands, rewriter,
                    [loc](OpBuilder &builder, ValueRange memRefOperands,
@@ -113,9 +113,9 @@ struct BinaryOpLowering : public ConversionPattern {
 
                      // Generate loads for the element of 'lhs' and 'rhs' at the
                      // inner loop.
-                     auto loadedLhs = builder.create<AffineLoadOp>(
+                     auto loadedLhs = builder.create<affine::AffineLoadOp>(
                          loc, binaryAdaptor.getLhs(), loopIvs);
-                     auto loadedRhs = builder.create<AffineLoadOp>(
+                     auto loadedRhs = builder.create<affine::AffineLoadOp>(
                          loc, binaryAdaptor.getRhs(), loopIvs);
 
                      // Create the binary operation performed on the loaded
@@ -143,7 +143,7 @@ struct ConstantOpLowering : public OpRewritePattern<toy::ConstantOp> {
 
     // When lowering the constant operation, we allocate and assign the constant
     // values to a corresponding memref allocation.
-    auto tensorType = op.getType().cast<TensorType>();
+    auto tensorType = llvm::cast<RankedTensorType>(op.getType());
     auto memRefType = convertTensorToMemRef(tensorType);
     auto alloc = insertAllocAndDealloc(memRefType, loc, rewriter);
 
@@ -174,7 +174,7 @@ struct ConstantOpLowering : public OpRewritePattern<toy::ConstantOp> {
       // The last dimension is the base case of the recursion, at this point
       // we store the element at the given index.
       if (dimension == valueShape.size()) {
-        rewriter.create<AffineStoreOp>(
+        rewriter.create<affine::AffineStoreOp>(
             loc, rewriter.create<arith::ConstantOp>(loc, *valueIt++), alloc,
             llvm::ArrayRef(indices));
         return;
@@ -205,12 +205,13 @@ struct ConstantOpLowering : public OpRewritePattern<toy::ConstantOp> {
 struct FuncOpLowering : public OpConversionPattern<toy::FuncOp> {
   using OpConversionPattern<toy::FuncOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(
-      toy::FuncOp op, OpAdaptor adaptor,
-      ConversionPatternRewriter &rewriter) const final {
+  LogicalResult
+  matchAndRewrite(toy::FuncOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
     // We only lower the main function as we expect that all other functions
     // have been inlined.
-    if (op.getName() != "main") return failure();
+    if (op.getName() != "main")
+      return failure();
 
     // Verify that the given main has no inputs and results.
     if (op.getNumArguments() || op.getFunctionType().getNumResults()) {
@@ -235,9 +236,9 @@ struct FuncOpLowering : public OpConversionPattern<toy::FuncOp> {
 struct PrintOpLowering : public OpConversionPattern<toy::PrintOp> {
   using OpConversionPattern<toy::PrintOp>::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(
-      toy::PrintOp op, OpAdaptor adaptor,
-      ConversionPatternRewriter &rewriter) const final {
+  LogicalResult
+  matchAndRewrite(toy::PrintOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
     // We don't lower "toy.print" in this pass, but we need to update its
     // operands.
     rewriter.updateRootInPlace(op,
@@ -257,7 +258,8 @@ struct ReturnOpLowering : public OpRewritePattern<toy::ReturnOp> {
                                 PatternRewriter &rewriter) const final {
     // During this lowering, we expect that all function calls have been
     // inlined.
-    if (op.hasOperand()) return failure();
+    if (op.hasOperand())
+      return failure();
 
     // We lower "toy.return" directly to "func.return".
     rewriter.replaceOpWithNewOp<func::ReturnOp>(op);
@@ -273,9 +275,9 @@ struct TransposeOpLowering : public ConversionPattern {
   TransposeOpLowering(MLIRContext *ctx)
       : ConversionPattern(toy::TransposeOp::getOperationName(), 1, ctx) {}
 
-  LogicalResult matchAndRewrite(
-      Operation *op, ArrayRef<Value> operands,
-      ConversionPatternRewriter &rewriter) const final {
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const final {
     auto loc = op->getLoc();
     lowerOpToLoops(op, operands, rewriter,
                    [loc](OpBuilder &builder, ValueRange memRefOperands,
@@ -289,14 +291,14 @@ struct TransposeOpLowering : public ConversionPattern {
                      // Transpose the elements by generating a load from the
                      // reverse indices.
                      SmallVector<Value, 2> reverseIvs(llvm::reverse(loopIvs));
-                     return builder.create<AffineLoadOp>(loc, input,
-                                                         reverseIvs);
+                     return builder.create<affine::AffineLoadOp>(loc, input,
+                                                                 reverseIvs);
                    });
     return success();
   }
 };
 
-}  // namespace
+} // namespace
 
 //===----------------------------------------------------------------------===//
 // ToyToAffineLoweringPass
@@ -311,11 +313,12 @@ struct ToyToAffineLoweringPass
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ToyToAffineLoweringPass)
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<AffineDialect, func::FuncDialect, memref::MemRefDialect>();
+    registry.insert<affine::AffineDialect, func::FuncDialect,
+                    memref::MemRefDialect>();
   }
   void runOnOperation() final;
 };
-}  // namespace
+} // namespace
 
 void ToyToAffineLoweringPass::runOnOperation() {
   // The first thing to define is the conversion target. This will define the
@@ -325,8 +328,9 @@ void ToyToAffineLoweringPass::runOnOperation() {
   // We define the specific operations, or dialects, that are legal targets for
   // this lowering. In our case, we are lowering to a combination of the
   // `Affine`, `Arith`, `Func`, and `MemRef` dialects.
-  target.addLegalDialect<AffineDialect, BuiltinDialect, arith::ArithDialect,
-                         func::FuncDialect, memref::MemRefDialect>();
+  target.addLegalDialect<affine::AffineDialect, BuiltinDialect,
+                         arith::ArithDialect, func::FuncDialect,
+                         memref::MemRefDialect>();
 
   // We also define the Toy dialect as Illegal so that the conversion will fail
   // if any of these operations are *not* converted. Given that we actually want
@@ -337,7 +341,7 @@ void ToyToAffineLoweringPass::runOnOperation() {
   target.addIllegalDialect<toy::ToyDialect>();
   target.addDynamicallyLegalOp<toy::PrintOp>([](toy::PrintOp op) {
     return llvm::none_of(op->getOperandTypes(),
-                         [](Type type) { return type.isa<TensorType>(); });
+                         [](Type type) { return llvm::isa<TensorType>(type); });
   });
 
   // Now that the conversion target has been defined, we just need to provide
