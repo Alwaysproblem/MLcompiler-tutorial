@@ -1,0 +1,7 @@
+build
+.vscode
+core
+*.log
+torch_ipu_example.py
+third_party
+external
