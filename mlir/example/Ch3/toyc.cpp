@@ -10,12 +10,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/StringRef.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/ErrorOr.h"
-#include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/raw_ostream.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
@@ -27,6 +21,12 @@
 #include "toy/Dialect.h"
 #include "toy/MLIRGen.h"
 #include "toy/Parser.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/ErrorOr.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace toy;
 namespace cl = llvm::cl;
@@ -38,7 +38,7 @@ static cl::opt<std::string> inputFilename(cl::Positional,
 
 namespace {
 enum InputType { Toy, MLIR };
-}  // namespace
+} // namespace
 static cl::opt<enum InputType> inputType(
     "x", cl::init(Toy), cl::desc("Decided the kind of output desired"),
     cl::values(clEnumValN(Toy, "toy", "load the input file as a Toy source.")),
@@ -47,7 +47,7 @@ static cl::opt<enum InputType> inputType(
 
 namespace {
 enum Action { None, DumpAST, DumpMLIR };
-}  // namespace
+} // namespace
 static cl::opt<enum Action> emitAction(
     "emit", cl::desc("Select the kind of output desired"),
     cl::values(clEnumValN(DumpAST, "ast", "output the AST dump")),
@@ -75,7 +75,8 @@ int loadMLIR(llvm::SourceMgr &sourceMgr, mlir::MLIRContext &context,
   if (inputType != InputType::MLIR &&
       !llvm::StringRef(inputFilename).endswith(".mlir")) {
     auto moduleAST = parseInputFile(inputFilename);
-    if (!moduleAST) return 6;
+    if (!moduleAST)
+      return 6;
     module = mlirGen(context, *moduleAST);
     return !module ? 1 : 0;
   }
@@ -106,16 +107,19 @@ int dumpMLIR() {
   mlir::OwningOpRef<mlir::ModuleOp> module;
   llvm::SourceMgr sourceMgr;
   mlir::SourceMgrDiagnosticHandler sourceMgrHandler(sourceMgr, &context);
-  if (int error = loadMLIR(sourceMgr, context, module)) return error;
+  if (int error = loadMLIR(sourceMgr, context, module))
+    return error;
 
   if (enableOpt) {
-    mlir::PassManager pm(&context);
+    mlir::PassManager pm(module.get()->getName());
     // Apply any generic pass manager command line options and run the pipeline.
-    applyPassManagerCLOptions(pm);
+    if (mlir::failed(mlir::applyPassManagerCLOptions(pm)))
+      return 4;
 
     // Add a run of the canonicalizer to optimize the mlir module.
     pm.addNestedPass<mlir::toy::FuncOp>(mlir::createCanonicalizerPass());
-    if (mlir::failed(pm.run(*module))) return 4;
+    if (mlir::failed(pm.run(*module)))
+      return 4;
   }
 
   module->dump();
@@ -129,7 +133,8 @@ int dumpAST() {
   }
 
   auto moduleAST = parseInputFile(inputFilename);
-  if (!moduleAST) return 1;
+  if (!moduleAST)
+    return 1;
 
   dump(*moduleAST);
   return 0;
@@ -144,13 +149,12 @@ int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv, "toy compiler\n");
 
   switch (emitAction) {
-    case Action::DumpAST:
-      return dumpAST();
-    case Action::DumpMLIR:
-      return dumpMLIR();
-    default:
-      llvm::errs()
-          << "No action specified (parsing only?), use -emit=<action>\n";
+  case Action::DumpAST:
+    return dumpAST();
+  case Action::DumpMLIR:
+    return dumpMLIR();
+  default:
+    llvm::errs() << "No action specified (parsing only?), use -emit=<action>\n";
   }
 
   return 0;

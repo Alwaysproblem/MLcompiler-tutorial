@@ -22,7 +22,7 @@ using namespace toy;
 namespace {
 /// Include the patterns defined in the Declarative Rewrite framework.
 #include "ToyCombine.inc"
-}  // namespace
+} // namespace
 
 /// Fold constants.
 OpFoldResult ConstantOp::fold(FoldAdaptor adaptor) { return getValue(); }
@@ -32,8 +32,10 @@ OpFoldResult StructConstantOp::fold(FoldAdaptor adaptor) { return getValue(); }
 
 /// Fold simple struct access operations that access into a constant.
 OpFoldResult StructAccessOp::fold(FoldAdaptor adaptor) {
-  auto structAttr = adaptor.getInput().dyn_cast_or_null<mlir::ArrayAttr>();
-  if (!structAttr) return nullptr;
+  auto structAttr =
+      llvm::dyn_cast_if_present<mlir::ArrayAttr>(adaptor.getInput());
+  if (!structAttr)
+    return nullptr;
 
   size_t elementIndex = getIndex();
   return structAttr[elementIndex];
@@ -51,14 +53,16 @@ struct SimplifyRedundantTranspose : public mlir::OpRewritePattern<TransposeOp> {
   /// This method attempts to match a pattern and rewrite it. The rewriter
   /// argument is the orchestrator of the sequence of rewrites. The pattern is
   /// expected to interact with it to perform any changes to the IR from here.
-  mlir::LogicalResult matchAndRewrite(
-      TransposeOp op, mlir::PatternRewriter &rewriter) const override {
+  mlir::LogicalResult
+  matchAndRewrite(TransposeOp op,
+                  mlir::PatternRewriter &rewriter) const override {
     // Look through the input of the current transpose.
     mlir::Value transposeInput = op.getOperand();
     TransposeOp transposeInputOp = transposeInput.getDefiningOp<TransposeOp>();
 
     // Input defined by another transpose? If not, no match.
-    if (!transposeInputOp) return failure();
+    if (!transposeInputOp)
+      return failure();
 
     // Otherwise, we have a redundant transpose. Use the rewriter.
     rewriter.replaceOp(op, {transposeInputOp.getOperand()});
