@@ -367,4 +367,31 @@ def TransposeOp : Toy_Op<"transpose",
   let hasVerifier = 1;
 }
 
+//===----------------------------------------------------------------------===//
+// MatMul Op
+//===----------------------------------------------------------------------===//
+
+def MatMulOp : Toy_Op<"matmul",
+    [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
+  let summary = "matrix multiplication operation";
+  let description = [{
+    The "matmul" operation performs Matrix multiplication between two
+    tensors. The shapes of the tensor operands are expected to match.
+  }];
+
+  let arguments = (ins F64Tensor:$lhs, F64Tensor:$rhs);
+  let results = (outs F64Tensor);
+
+  let assemblyFormat = [{
+    `(` $lhs `:` type($lhs) `,` $rhs `:` type($rhs) `)` attr-dict `to` type(results)
+  }];
+
+  // Allow building a MatMulOp with from the two input operands.
+  let builders = [
+    OpBuilder<(ins "Value":$lhs, "Value":$rhs)>
+  ];
+
+  let hasVerifier = 1;
+}
+
 #endif // TOY_OPS
