@@ -1,9 +1,12 @@
+#include <llvm/Support/CommandLine.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_ostream.h>
 #include <mhlo/IR/hlo_ops.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Parser/Parser.h>
+#include <mlir/Pass/PassManager.h>
+#include <mlir/Transforms/Passes.h>
 
 #include <iostream>
 #include <memory>
@@ -12,7 +15,16 @@
 #include <string>
 #include <vector>
 
-int loadMHLO(llvm::SourceMgr &sourceMgr, mlir::MLIRContext &context,
+namespace cl = llvm::cl;
+
+static cl::opt<std::string> inputFilename(cl::Positional,
+                                          cl::desc("<input toy file>"),
+                                          cl::init("-"),
+                                          cl::value_desc("filename"));
+
+static cl::opt<bool> enableOpt("opt", cl::desc("Enable optimizations"));
+
+int loadMhlo(llvm::SourceMgr &sourceMgr, mlir::MLIRContext &context,
              mlir::OwningOpRef<mlir::ModuleOp> &module,
              std::string &inputFilename) {
   // Otherwise, the input is '.mlir'.
@@ -35,12 +47,12 @@ int loadMHLO(llvm::SourceMgr &sourceMgr, mlir::MLIRContext &context,
 
 int main(int argc, char *argv[]) {
 
-  if (argc < 2) {
-    llvm::errs() << "usage: " << argv[0] << " <mlir file name>" << '\n';
-    return 1;
-  }
+  // Register any command line options.
+  mlir::registerAsmPrinterCLOptions();
+  mlir::registerMLIRContextCLOptions();
+  mlir::registerPassManagerCLOptions();
 
-  std::string inputFilename = argv[1];
+  cl::ParseCommandLineOptions(argc, argv, "toy compiler\n");
 
   mlir::MLIRContext context;
   context.loadDialect<mlir::mhlo::MhloDialect, mlir::func::FuncDialect>();
@@ -49,10 +61,26 @@ int main(int argc, char *argv[]) {
   llvm::SourceMgr sourceMgr;
   mlir::SourceMgrDiagnosticHandler sourceMgrHandler(sourceMgr, &context);
 
-  loadMHLO(sourceMgr, context, module, inputFilename);
+  if (int err = loadMhlo(sourceMgr, context, module, inputFilename)) {
+    llvm::errs() << "Error loading MHLO module from file " << inputFilename
+                 << ": " << err << "\n";
+    return err;
+  };
 
   llvm::outs() << "Input mhlo mlir:" << '\n';
   module->dump();
+
+  if (enableOpt) {
+    mlir::PassManager pm(&context);
+    // Apply any generic pass manager command line options and run the pipeline.
+    applyPassManagerCLOptions(pm);
+
+    // Add a run of the canonicalizer to optimize the mlir module.
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::createCanonicalizerPass());
+
+    if (mlir::failed(pm.run(*module)))
+      return 4;
+  }
 
   return 0;
 }
