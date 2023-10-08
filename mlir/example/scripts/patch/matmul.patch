@@ -1,0 +1,133 @@
+diff --git a/mlir/example/Ch8/include/toy/Ops.td b/mlir/example/Ch8/include/toy/Ops.td
+index 157e207..298bd3e 100644
+--- a/mlir/example/Ch8/include/toy/Ops.td
++++ b/mlir/example/Ch8/include/toy/Ops.td
+@@ -367,4 +367,31 @@ def TransposeOp : Toy_Op<"transpose",
+   let hasVerifier = 1;
+ }
+
++//===----------------------------------------------------------------------===//
++// MatMul Op
++//===----------------------------------------------------------------------===//
++
++def MatMulOp : Toy_Op<"matmul",
++    [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
++  let summary = "matrix multiplication operation";
++  let description = [{
++    The "matmul" operation performs Matrix multiplication between two
++    tensors. The shapes of the tensor operands are expected to match.
++  }];
++
++  let arguments = (ins F64Tensor:$lhs, F64Tensor:$rhs);
++  let results = (outs F64Tensor);
++
++  let assemblyFormat = [{
++    `(` $lhs `:` type($lhs) `,` $rhs `:` type($rhs) `)` attr-dict `to` type(results)
++  }];
++
++  // Allow building a MatMulOp with from the two input operands.
++  let builders = [
++    OpBuilder<(ins "Value":$lhs, "Value":$rhs)>
++  ];
++
++  let hasVerifier = 1;
++}
++
+ #endif // TOY_OPS
+diff --git a/mlir/example/Ch8/matmul.toy.mlir b/mlir/example/Ch8/matmul.toy.mlir
+new file mode 100644
+index 0000000..5a0cd7e
+--- /dev/null
++++ b/mlir/example/Ch8/matmul.toy.mlir
+@@ -0,0 +1,16 @@
++toy.func private @matmul_transpose(%arg0: tensor<*xf64>, %arg1: tensor<*xf64>) -> tensor<*xf64> {
++  %0 = toy.transpose(%arg0 : tensor<*xf64>) to tensor<*xf64>
++  %1 = toy.transpose(%arg1 : tensor<*xf64>) to tensor<*xf64>
++  %2 = toy.matmul(%0 : tensor<*xf64>, %1 : tensor<*xf64>) to tensor<*xf64>
++  toy.return %2 : tensor<*xf64>
++}
++
++toy.func @main() {
++  %0 = toy.constant dense<[[1.000000e+00, 2.000000e+00, 3.000000e+00], [4.000000e+00, 5.000000e+00, 6.000000e+00]]> : tensor<2x3xf64>
++  %1 = toy.reshape(%0 : tensor<2x3xf64>) to tensor<2x3xf64>
++  %2 = toy.constant dense<[1.000000e+00, 2.000000e+00, 3.000000e+00, 4.000000e+00, 5.000000e+00, 6.000000e+00]> : tensor<6xf64>
++  %3 = toy.reshape(%2 : tensor<6xf64>) to tensor<3x2xf64>
++  %4 = toy.generic_call @matmul_transpose(%1, %3) : (tensor<2x3xf64>, tensor<3x2xf64>) -> tensor<*xf64>
++  toy.print %4 : tensor<*xf64>
++  toy.return
++}
+diff --git a/mlir/example/Ch8/mlir/Dialect.cpp b/mlir/example/Ch8/mlir/Dialect.cpp
+index 6ec105a..d750782 100644
+--- a/mlir/example/Ch8/mlir/Dialect.cpp
++++ b/mlir/example/Ch8/mlir/Dialect.cpp
+@@ -439,6 +439,63 @@ mlir::LogicalResult TransposeOp::verify() {
+   return mlir::success();
+ }
+
++//===----------------------------------------------------------------------===//
++// MatMulOp
++//===----------------------------------------------------------------------===//
++
++void MatMulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
++                     mlir::Value lhs, mlir::Value rhs) {
++  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
++  state.addOperands({lhs, rhs});
++}
++
++// mlir::ParseResult MatMulOp::parse(mlir::OpAsmParser &parser,
++//                                mlir::OperationState &result) {
++//   return parseBinaryOp(parser, result);
++// }
++
++// void MatMulOp::print(mlir::OpAsmPrinter &p) { printBinaryOp(p, *this); }
++
++mlir::LogicalResult MatMulOp::verify() {
++  auto lhsType = getLhs().getType().dyn_cast<RankedTensorType>();
++  auto rhsType = getRhs().getType().dyn_cast<RankedTensorType>();
++  auto resultType = getType().dyn_cast<RankedTensorType>();
++
++  if (!lhsType || !rhsType || !resultType)
++    return mlir::success();
++
++  auto lhsShape = lhsType.getShape();
++  auto rhsShape = rhsType.getShape();
++
++  if (lhsShape.size() != 2 || rhsShape.size() != 2) {
++    return emitOpError() << "expected 2D matrix";
++  }
++
++  if (lhsShape[1] != rhsShape[0]) {
++    return emitOpError() << "expected dimension to match"
++                         << "the shape of lhs is [" << lhsShape[0] << ", "
++                         << lhsShape[1] << "] "
++                         << "the shape of rhs is [" << rhsShape[0] << ", "
++                         << rhsShape[1] << "] "
++                         << "but the dimension " << lhsShape[1]
++                         << "!=" << rhsShape[0] << '\n';
++  }
++
++  return mlir::success();
++}
++
++/// Infer the output shape of the MatMulOp, this is required by the shape
++/// inference interface.
++void MatMulOp::inferShapes() {
++  RankedTensorType lhsType = getLhs().getType().cast<RankedTensorType>();
++  RankedTensorType rhsType = getRhs().getType().cast<RankedTensorType>();
++  auto lhsShape = lhsType.getShape();
++  auto rhsShape = rhsType.getShape();
++  RankedTensorType res_type = RankedTensorType::get({lhsShape[0], rhsShape[1]},
++                                                    lhsType.getElementType());
++  getResult().setType(res_type);
++}
++
+ //===----------------------------------------------------------------------===//
+ // TableGen'd op method definitions
+ //===----------------------------------------------------------------------===//
+diff --git a/torch/pytorch b/torch/pytorch
+index 256fed0..138e289 160000
+--- a/torch/pytorch
++++ b/torch/pytorch
+@@ -1 +1 @@
+-Subproject commit 256fed02e930210dbcd7e5e23fcf142362098c2a
++Subproject commit 138e2895d08a6517c5718b2a0118c1b23ff4664c-dirty
