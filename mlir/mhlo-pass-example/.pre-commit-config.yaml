@@ -13,7 +13,7 @@ repos:
         files: \.(js|ts|jsx|tsx|css|less|html|json|markdown|md|yaml|yml)$
         args:
           - "--config"
-          - ".prettierrc"
+          - "mlir/mhlo-pass-example/.prettierrc"
 
   - repo: https://github.com/pycqa/pylint
     rev: v2.15.5

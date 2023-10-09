@@ -26,12 +26,6 @@ message(STATUS "MLIR_INCLUDE_DIR include dir: ${MLIR_INCLUDE_DIR}")
 message(STATUS "Using MHLOConfig.cmake in: ${MHLO_DIR}")
 message(STATUS "MHLO_INCLUDE_DIRS include dir: ${MHLO_INCLUDE_DIRS}")
 
-if(NOT POPLAR_SDK_PATH)
-  set(POPLAR_SDK_PATH ${PACKAGE_PREFIX_DIR})
-endif()
-
-message(STATUS "POPLAR_SDK_PATH include dir: ${POPLAR_SDK_PATH}")
-
 include_directories(${MHLO_INCLUDE_DIRS})
 include_directories(${LLVM_INCLUDE_DIR})
 include_directories(${MLIR_INCLUDE_DIR})
@@ -48,5 +42,5 @@ include(AddLLVM)
 # note: fix the llvm::cl undefined reference problem
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fno-rtti")
 
-# add_subdirectory(popit-example) add_subdirectory(mhlo-popir)
 add_subdirectory(mhlo_example)
+add_subdirectory(Pow2)
