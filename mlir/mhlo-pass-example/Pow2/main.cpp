@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
   mlir::registerMLIRContextCLOptions();
   mlir::registerPassManagerCLOptions();
 
-  cl::ParseCommandLineOptions(argc, argv, "toy compiler\n");
+  cl::ParseCommandLineOptions(argc, argv, "pass example compiler\n");
 
   mlir::MLIRContext context;
   context.loadDialect<mlir::mhlo::MhloDialect, mlir::func::FuncDialect>();

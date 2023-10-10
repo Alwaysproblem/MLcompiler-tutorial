@@ -29,7 +29,6 @@ bool ValueEql2(Value operand) {
       return true;
     }
   }
-  llvm::outs() << "FValue: " << FValue.convertToFloat() << "\n";
   return false;
 }
 } // namespace
