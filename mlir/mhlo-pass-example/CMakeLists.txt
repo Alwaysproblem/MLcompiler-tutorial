@@ -44,3 +44,4 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fno-rtti")
 
 add_subdirectory(mhlo_example)
 add_subdirectory(Pow2)
+add_subdirectory(Tanh)
