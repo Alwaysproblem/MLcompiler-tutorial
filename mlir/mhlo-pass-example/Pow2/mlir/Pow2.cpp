@@ -22,6 +22,19 @@
 using namespace mlir;
 
 namespace {
+bool ValueEql2(Value operand) {
+  FloatAttr::ValueType FValue = FloatAttr::ValueType(2.0);
+  if (matchPattern(operand, m_ConstantFloat(&FValue))) {
+    if (FValue.convertToFloat() == 2.0) {
+      return true;
+    }
+  }
+  llvm::outs() << "FValue: " << FValue.convertToFloat() << "\n";
+  return false;
+}
+} // namespace
+
+namespace {
 /// Include the patterns defined in the Declarative Rewrite framework.
 #include "Pow2.inc"
 } // namespace
@@ -38,7 +51,7 @@ struct SubstitutePow2Pass
 void SubstitutePow2Pass::runOnOperation() {
   auto op = getOperation();
   RewritePatternSet patterns(&getContext());
-  patterns.add<ReshapeReshapeOptPattern>(&getContext());
+  patterns.add<Pow2OptPattern>(&getContext());
   if (failed(applyPatternsAndFoldGreedily(op, std::move(patterns))))
     signalPassFailure();
 }
