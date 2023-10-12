@@ -3,6 +3,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <mhlo/IR/hlo_ops.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/Dialect/PDL/IR/PDL.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Parser/Parser.h>
 #include <mlir/Pass/PassManager.h>
@@ -57,7 +58,8 @@ int main(int argc, char *argv[]) {
   cl::ParseCommandLineOptions(argc, argv, "pass example compiler\n");
 
   mlir::MLIRContext context;
-  context.loadDialect<mlir::mhlo::MhloDialect, mlir::func::FuncDialect>();
+  context.loadDialect<mlir::mhlo::MhloDialect, mlir::func::FuncDialect,
+                      mlir::pdl::PDLDialect>();
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
   llvm::SourceMgr sourceMgr;

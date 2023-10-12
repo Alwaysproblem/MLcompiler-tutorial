@@ -10,6 +10,7 @@
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/IR/PatternMatch.h>
+#include <mlir/Parser/Parser.h>
 #include <mlir/Pass/PassManager.h>
 #include <mlir/Transforms/GreedyPatternRewriteDriver.h>
 #include <mlir/Transforms/Passes.h>
@@ -31,11 +32,21 @@ bool ValueEql2(Value operand) {
   }
   return false;
 }
+
+static LogicalResult Eqn2Impl(PatternRewriter &rewriter, Value value) {
+  return success(ValueEql2(value));
+}
+
 } // namespace
+
+void registerNativeConstraints(RewritePatternSet &patterns) {
+  patterns.getPDLPatterns().registerConstraintFunction("Eqn2", Eqn2Impl);
+}
 
 namespace {
 /// Include the patterns defined in the Declarative Rewrite framework.
 #include "Pow2.inc"
+#include "Pow2Pdll.inc"
 } // namespace
 
 namespace {
@@ -55,6 +66,30 @@ void SubstitutePow2Pass::runOnOperation() {
     signalPassFailure();
 }
 
+namespace {
+struct SubstitutePow2PdllPass
+    : public PassWrapper<SubstitutePow2PdllPass, OperationPass<func::FuncOp>> {
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(SubstitutePow2PdllPass)
+
+  void runOnOperation() final;
+};
+} // namespace
+
+void SubstitutePow2PdllPass::runOnOperation() {
+  auto op = getOperation();
+  RewritePatternSet patterns(&getContext());
+  // --- insert the native constraints ---
+  registerNativeConstraints(patterns);
+  // --- insert the native constraints ---
+  patterns.add<Pow2PdllOptPattern>(&getContext());
+  if (failed(applyPatternsAndFoldGreedily(op, std::move(patterns))))
+    signalPassFailure();
+}
+
 std::unique_ptr<mlir::Pass> mhlo::createSubstitutePow2Pass() {
-  return std::make_unique<SubstitutePow2Pass>();
+  // There are 2 methods to achieve the same goal:
+  // 1. use the tddr rules to rewrite the IR
+  // return std::make_unique<SubstitutePow2Pass>();
+  // 2. use the pdll to rewrite the IR
+  return std::make_unique<SubstitutePow2PdllPass>();
 }

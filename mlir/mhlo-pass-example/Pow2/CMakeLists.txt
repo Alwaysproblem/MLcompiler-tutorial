@@ -10,7 +10,10 @@ add_public_tablegen_target(Pow2IncGen)
 
 add_executable(pow2 main.cpp mlir/Pow2.cpp)
 
-add_dependencies(pow2 Pow2IncGen)
+add_mlir_pdll_library(Pow2PdllIncGen mlir/Pow2.pdll Pow2Pdll.inc EXTRA_INCLUDES
+                      ${MLIR_INCLUDE_DIR})
+
+add_dependencies(pow2 Pow2IncGen Pow2PdllIncGen)
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/include/)
