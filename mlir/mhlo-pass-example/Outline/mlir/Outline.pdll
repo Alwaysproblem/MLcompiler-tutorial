@@ -1,0 +1,39 @@
+#include "mlir/IR/PatternBase.td"
+#include "mhlo/IR/hlo_ops.td"
+#include "mlir/Dialect/Func/IR/FuncOps.td"
+
+// The first way to replace
+Pattern OutlinePdllOptPattern with benefit(0) {
+  // ** match section ** //
+  let root = op<mhlo.power>( arg :Value,
+                             op<mhlo.constant>() {
+                                value = attr<"dense<2.0> : tensor<2x2xf32>">});
+
+  // ** rewrite section ** //
+  replace root with op<mhlo.multiply>(arg, arg);
+}
+
+// // Add Custom Constraints to rewrite pattern
+// Constraint Eqn2(value: Value);
+
+// Constraint TypesAreIdentical(value1: Value, value2: Value)[{
+//   return success(value1.getType() == value2.getType());
+// }];
+
+// // A rewrite that constructs and returns a new operation, given an input value.
+// Rewrite BuildFuncOp(value: Value) -> Op [{
+
+//   func::FuncOp op = rewriter.create<func::FuncOp>(value.getLoc(), "pow2");
+//   return op;
+// }];
+
+// Pattern Pow2PdllOptPattern with benefit(0) {
+//   // ** match section ** //
+//   let const_2 : Value = op<mhlo.constant>();
+//   let arg : Value;
+//   TypesAreIdentical(arg, const_2);
+//   Eqn2(const_2);
+//   let root = op<mhlo.power>(arg, const_2);
+//   // replace root with op<mhlo.multiply>(arg, arg);
+//   replace root with BuildFuncOp(root);
+// }
