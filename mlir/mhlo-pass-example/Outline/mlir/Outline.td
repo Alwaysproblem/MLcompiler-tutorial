@@ -25,14 +25,7 @@ include "mhlo/IR/hlo_ops.td"
 ///    dag benefitsAdded = (addBenefit 0)
 /// >;
 
-
-def TypesAreIdentical : Constraint<CPred<"$0.getType() == $1.getType()">>;
-
-def Eqn2 : Constraint<CPred<"::ValueEql2($0)">>;
-
 def OutlinePattern : Pat<(MHLO_PowOp $arg, (MHLO_ConstantOp:$cst $cstVal)),
-                         (MHLO_MulOp $arg, $arg),
-                         [(TypesAreIdentical $arg, $cst),
-                          (Eqn2 $cst)]>;
+                         (MHLO_MulOp $arg, $arg)>;
 
 #endif // POW_2

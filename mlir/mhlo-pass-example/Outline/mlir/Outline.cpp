@@ -23,35 +23,41 @@
 using namespace mlir;
 
 namespace {
-bool ValueEql2(Value operand) {
-  FloatAttr::ValueType FValue = FloatAttr::ValueType(2.0);
-  if (matchPattern(operand, m_ConstantFloat(&FValue))) {
-    if (FValue.convertToFloat() == 2.0) {
-      return true;
-    }
-  }
-  return false;
-}
 
-static LogicalResult Eqn2Impl(PatternRewriter &rewriter, Value value) {
-  return success(ValueEql2(value));
-}
+mlir::Operation *createFunction(mlir::PatternRewriter &rewriter,
+                                mlir::Value root, mlir::Value input) {
+  mlir::ModuleOp module_op = llvm::dyn_cast<mlir::ModuleOp>(
+      input.getParentRegion()->getParentOp()->getParentOp());
+  mlir::Block *module_block = module_op.getBody();
+  mlir::OpBuilder builder(input.getContext());
+  builder.setInsertionPointToStart(module_block);
+  mlir::FunctionType func_type =
+      builder.getFunctionType(input.getType(), root.getType());
+  func::FuncOp func_op =
+      builder.create<func::FuncOp>(root.getLoc(), "tanh_function", func_type);
 
-// static Operation *FuncOpImpl(PDLResultList &results, Value value) {
-//   // insert special rewrite logic here.
-//   Operation *resultOp = ;
-//   return resultOp;
-// }
+  builder.setInsertionPointToStart(func_op.addEntryBlock());
+  mlir::Value argument = func_op.getArgument(0);
+  mlir::Value exp_res = builder.create<mhlo::ExpOp>(root.getLoc(), argument);
+  mlir::Value neg_res = builder.create<mhlo::NegOp>(root.getLoc(), argument);
+  mlir::Value exp_neg_res = builder.create<mhlo::ExpOp>(root.getLoc(), neg_res);
+  mlir::Value sub_res =
+      builder.create<mhlo::SubtractOp>(root.getLoc(), exp_res, exp_neg_res);
+  mlir::Value add_res =
+      builder.create<mhlo::AddOp>(root.getLoc(), exp_res, exp_neg_res);
+  mlir::Value root_res =
+      builder.create<mhlo::DivOp>(root.getLoc(), sub_res, add_res);
+
+  builder.create<func::ReturnOp>(root.getLoc(), root_res);
+  // rewriter.create<func::CallOp>(root.getLoc(), "tanh_function",
+  // root.getType(),
+  //                               input);
+  // module_op.print(llvm::outs());
+  // return rewriter.create<mhlo::TanhOp>(root.getLoc(), input);
+  return rewriter.create<func::CallOp>(root.getLoc(), func_op, input);
+}
 
 } // namespace
-
-void registerNativeConstraints(RewritePatternSet &patterns) {
-  patterns.getPDLPatterns().registerConstraintFunction("Eqn2", Eqn2Impl);
-}
-
-// void registerNativeRewrite(RewritePatternSet &patterns) {
-//   patterns.getPDLPatterns().registerRewriteFunction("FuncOp", FuncOpImpl);
-// }
 
 namespace {
 /// Include the patterns defined in the Declarative Rewrite framework.
@@ -88,9 +94,6 @@ struct OutlinePdllPass
 void OutlinePdllPass::runOnOperation() {
   auto op = getOperation();
   RewritePatternSet patterns(&getContext());
-  // --- insert the native constraints ---
-  // registerNativeConstraints(patterns);
-  // --- insert the native constraints ---
   patterns.add<OutlinePdllOptPattern>(&getContext());
   if (failed(applyPatternsAndFoldGreedily(op, std::move(patterns))))
     signalPassFailure();
