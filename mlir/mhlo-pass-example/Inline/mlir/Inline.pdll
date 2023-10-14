@@ -1,0 +1,21 @@
+#include "mlir/IR/PatternBase.td"
+#include "mhlo/IR/hlo_ops.td"
+#include "mlir/Dialect/Func/IR/FuncOps.td"
+
+// A rewrite that constructs and returns a new operation, given an input value.
+// Rewrite BuildFuncOp(root: Value, input: Value) -> Op [{
+//   return rewriter.create<mhlo::TanhOp>(root.getLoc(), input);
+// }];
+
+Rewrite RegionOf(callee: Value, input: Value) -> Op [{
+  return RegionOfFunc(rewriter, callee, input);
+}];
+
+Pattern InlinePdllOptPattern with benefit(0) {
+  // ** match section ** //
+  let callee = op<func.call>(arg: Value) {callee = attr<"@tanh_function">};
+  // let callee = op<mhlo.exponential>(arg: Value);
+  // ** rewrite section ** //
+  // replace callee with op<mhlo.log>(arg);
+  replace callee with RegionOf(callee, arg);
+}
