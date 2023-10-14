@@ -54,7 +54,8 @@ mlir::Operation *createFunction(mlir::PatternRewriter &rewriter,
   //                               input);
   // module_op.print(llvm::outs());
   // return rewriter.create<mhlo::TanhOp>(root.getLoc(), input);
-  return rewriter.create<func::CallOp>(root.getLoc(), func_op, input);
+  // return rewriter.create<func::CallOp>(root.getLoc(), func_op, input);
+  return func_op;
 }
 
 } // namespace

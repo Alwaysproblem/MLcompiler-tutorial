@@ -21,5 +21,9 @@ Pattern OutlinePdllOptPattern with benefit(0) {
   let root = op<mhlo.divide>(sub, add);
 
   // ** rewrite section ** //
-  replace root with BuildFuncOp(root, arg);
+  // replace root with BuildFuncOp(root, arg);
+  rewrite root with {
+    BuildFuncOp(root, arg);
+    replace root with op<func.call>(arg) {callee = attr<"@tanh_function">};
+  };
 }
