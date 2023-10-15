@@ -24,9 +24,47 @@ using namespace mlir;
 
 namespace {
 
-mlir::Operation *RegionOfFunc(mlir::PatternRewriter &rewriter,
-                              mlir::Value callee, mlir::Value input) {
-  return rewriter.create<mlir::mhlo::LogOp>(callee.getLoc(), input);
+void RegionOfFunc(mlir::PatternRewriter &rewriter, mlir::Value callee,
+                  mlir::Value input) {
+  // mlir::Operation *RegionOfFunc(mlir::PatternRewriter &rewriter,
+  //                               mlir::Value callee, mlir::Value input) {
+  auto calleeOp = callee.getDefiningOp<func::CallOp>();
+  if (!calleeOp) {
+    return;
+  }
+  llvm::StringRef callee_name = calleeOp.getCallee();
+  mlir::ModuleOp module_op = llvm::dyn_cast<mlir::ModuleOp>(
+      callee.getParentRegion()->getParentOp()->getParentOp());
+  auto calleeFuncOp = module_op.lookupSymbol<func::FuncOp>(callee_name);
+  mlir::Block *callee_block = &calleeFuncOp.getBlocks().front();
+  mlir::Region &calleeFuncOpRegion = calleeFuncOp.getBody();
+  callee_block->without_terminator();
+  mlir::Operation *callee_ptr = calleeOp;
+  mlir::Block *inlineBlock = callee.getParentBlock();
+  mlir::Block *postinlineBlock =
+      inlineBlock->splitBlock(callee_ptr->getIterator());
+
+  inlineBlock->getParent()->getBlocks().splice(
+      postinlineBlock->getIterator(), calleeFuncOpRegion.getBlocks(),
+      calleeFuncOpRegion.begin(), calleeFuncOpRegion.end());
+  auto newBlocks = llvm::make_range(std::next(inlineBlock->getIterator()),
+                                    postinlineBlock->getIterator());
+
+  Block *firstNewBlock = &*newBlocks.begin();
+
+  // auto *firstBlockTerminator = firstNewBlock->getTerminator();
+  // rewriter.eraseOp(firstBlockTerminator);
+  // firstNewBlock->getOperations().splice(firstNewBlock->end(),
+  //                                         postinlineBlock->getOperations());
+
+  firstNewBlock->print(llvm::outs());
+  rewriter.eraseBlock(postinlineBlock);
+  rewriter.eraseOp(calleeFuncOp);
+  rewriter.mergeBlocks(firstNewBlock, inlineBlock, input);
+  llvm::outs() << "callee: "
+               << "\n";
+  module_op.print(llvm::outs());
+  // return rewriter.create<mhlo::AbsOp>(callee.getLoc(), input);
 }
 
 } // namespace
@@ -66,6 +104,7 @@ struct InlinePass
   /// multi-thread. So, the solution is implemented the `initialize` function to
   /// create a new `RewritePatternSet` since the `initialize` function will only
   /// call once.
+  /// NB: the `op->erase` action will cause the `Segmentation Fault` error.
   LogicalResult initialize(MLIRContext *context) override {
     RewritePatternSet owningPatterns(context);
     // registerNativeConstraints(owningPatterns);

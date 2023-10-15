@@ -7,15 +7,25 @@
 //   return rewriter.create<mhlo::TanhOp>(root.getLoc(), input);
 // }];
 
-Rewrite RegionOf(callee: Value, input: Value) -> Op [{
-  return RegionOfFunc(rewriter, callee, input);
+Rewrite RegionOf(callee: Value, input: Value) [{
+  RegionOfFunc(rewriter, callee, input);
 }];
 
-Pattern InlinePdllOptPattern with benefit(0) {
+// Rewrite RegionOf(callee: Value, input: Value) -> Op [{
+//   return RegionOfFunc(rewriter, callee, input);
+// }];
+
+Pattern InlinePdllOptPattern with benefit(1) {
   // ** match section ** //
   let callee = op<func.call>(arg: Value) {callee = attr<"@tanh_function">};
   // let callee = op<mhlo.exponential>(arg: Value);
   // ** rewrite section ** //
   // replace callee with op<mhlo.log>(arg);
-  replace callee with RegionOf(callee, arg);
+  // replace callee with RegionOf(callee, arg);
+  rewrite callee with {
+    RegionOf(callee, arg);
+    // let callee_func = RegionOf(callee, arg);
+    // erase callee_func;
+    // erase callee;
+  };
 }

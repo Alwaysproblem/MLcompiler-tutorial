@@ -1,5 +1,5 @@
 module {
-  func.func @tanh_function(%arg0: tensor<2x2xf32>) -> tensor<2x2xf32> {
+  func.func private @tanh_function(%arg0: tensor<2x2xf32>) -> tensor<2x2xf32> {
     %0 = mhlo.exponential %arg0 : tensor<2x2xf32>
     %1 = mhlo.negate %arg0 : tensor<2x2xf32>
     %2 = mhlo.exponential %1 : tensor<2x2xf32>
