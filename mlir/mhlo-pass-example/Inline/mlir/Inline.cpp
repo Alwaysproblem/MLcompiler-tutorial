@@ -24,48 +24,62 @@ using namespace mlir;
 
 namespace {
 
+// The first way to do Inline action.
+// This need `erase callee;` action in pdll files.
 void RegionOfFunc(mlir::PatternRewriter &rewriter, mlir::Value callee,
                   mlir::Value input) {
-  // mlir::Operation *RegionOfFunc(mlir::PatternRewriter &rewriter,
-  //                               mlir::Value callee, mlir::Value input) {
   auto calleeOp = callee.getDefiningOp<func::CallOp>();
-  if (!calleeOp) {
-    return;
-  }
   llvm::StringRef callee_name = calleeOp.getCallee();
   mlir::ModuleOp module_op = llvm::dyn_cast<mlir::ModuleOp>(
       callee.getParentRegion()->getParentOp()->getParentOp());
   auto calleeFuncOp = module_op.lookupSymbol<func::FuncOp>(callee_name);
-  mlir::Block *callee_block = &calleeFuncOp.getBlocks().front();
   mlir::Region &calleeFuncOpRegion = calleeFuncOp.getBody();
-  callee_block->without_terminator();
-  mlir::Operation *callee_ptr = calleeOp;
+  mlir::Region &main_region = *callee.getParentRegion();
+
+  rewriter.inlineRegionBefore(calleeFuncOpRegion, main_region,
+                              main_region.end());
+
   mlir::Block *inlineBlock = callee.getParentBlock();
-  mlir::Block *postinlineBlock =
-      inlineBlock->splitBlock(callee_ptr->getIterator());
-
-  inlineBlock->getParent()->getBlocks().splice(
-      postinlineBlock->getIterator(), calleeFuncOpRegion.getBlocks(),
-      calleeFuncOpRegion.begin(), calleeFuncOpRegion.end());
-  auto newBlocks = llvm::make_range(std::next(inlineBlock->getIterator()),
-                                    postinlineBlock->getIterator());
-
-  Block *firstNewBlock = &*newBlocks.begin();
-
-  // auto *firstBlockTerminator = firstNewBlock->getTerminator();
-  // rewriter.eraseOp(firstBlockTerminator);
-  // firstNewBlock->getOperations().splice(firstNewBlock->end(),
-  //                                         postinlineBlock->getOperations());
-
-  firstNewBlock->print(llvm::outs());
-  rewriter.eraseBlock(postinlineBlock);
+  mlir::Block *interm_b = &*std::next(inlineBlock->getIterator());
+  mlir::Operation *term = interm_b->getTerminator();
+  mlir::Value term_oper = term->getOperands().front();
+  rewriter.eraseOp(interm_b->getTerminator());
+  rewriter.mergeBlockBefore(interm_b, calleeOp, input);
+  inlineBlock->getTerminator()->getOpOperands().front().set(term_oper);
   rewriter.eraseOp(calleeFuncOp);
-  rewriter.mergeBlocks(firstNewBlock, inlineBlock, input);
-  llvm::outs() << "callee: "
-               << "\n";
-  module_op.print(llvm::outs());
-  // return rewriter.create<mhlo::AbsOp>(callee.getLoc(), input);
 }
+
+// The second way to do Inline action
+// This need to delete `erase callee;` action in pdll files.
+// But this is not real inline action, it only merge the callee region to the
+// caller region. and discard the block after the callee region.
+// void RegionOfFunc(mlir::PatternRewriter &rewriter, mlir::Value callee,
+//                   mlir::Value input) {
+//   auto calleeOp = callee.getDefiningOp<func::CallOp>();
+//   llvm::StringRef callee_name = calleeOp.getCallee();
+//   mlir::ModuleOp module_op = llvm::dyn_cast<mlir::ModuleOp>(
+//       callee.getParentRegion()->getParentOp()->getParentOp());
+//   auto calleeFuncOp = module_op.lookupSymbol<func::FuncOp>(callee_name);
+//   mlir::Block *callee_block = &calleeFuncOp.getBlocks().front();
+//   mlir::Region &calleeFuncOpRegion = calleeFuncOp.getBody();
+
+//   mlir::Operation *callee_ptr = calleeOp;
+//   mlir::Block *inlineBlock = callee.getParentBlock();
+//   mlir::Block *postinlineBlock =
+//       inlineBlock->splitBlock(callee_ptr->getIterator());
+
+//   inlineBlock->getParent()->getBlocks().splice(
+//       postinlineBlock->getIterator(), calleeFuncOpRegion.getBlocks(),
+//       calleeFuncOpRegion.begin(), calleeFuncOpRegion.end());
+//   auto newBlocks = llvm::make_range(std::next(inlineBlock->getIterator()),
+//                                     postinlineBlock->getIterator());
+
+//   Block *firstNewBlock = &*newBlocks.begin();
+
+//   rewriter.eraseBlock(postinlineBlock);
+//   rewriter.eraseOp(calleeFuncOp);
+//   rewriter.mergeBlocks(firstNewBlock, inlineBlock, input);
+// }
 
 } // namespace
 
@@ -146,6 +160,9 @@ struct InlinePdllPass
 
 void InlinePdllPass::runOnOperation() {
   auto op = getOperation();
+  // Here we only apply pass on the `main` function.
+  if (op.getName() != "main")
+    return;
   if (failed(applyPatternsAndFoldGreedily(op, std::move(patterns))))
     signalPassFailure();
 }
@@ -157,3 +174,102 @@ std::unique_ptr<mlir::Pass> mhlo::createInlinePass() {
   // 2. use the pdll to rewrite the IR
   return std::make_unique<InlinePdllPass>();
 }
+
+// --------------- unused code ----------------
+
+// auto *firstBlockTerminator = firstNewBlock->getTerminator();
+// rewriter.eraseOp(firstBlockTerminator);
+// firstNewBlock->getOperations().splice(firstNewBlock->end(),
+//                                         postinlineBlock->getOperations());
+
+// void RegionOfFunc(mlir::PatternRewriter &rewriter, mlir::Value callee,
+//                   mlir::Value input) {
+//   // mlir::Operation *RegionOfFunc(mlir::PatternRewriter &rewriter,
+//   //                               mlir::Value callee, mlir::Value input) {
+//   auto calleeOp = callee.getDefiningOp<func::CallOp>();
+//   if (!calleeOp) {
+//     return;
+//   }
+//   llvm::StringRef callee_name = calleeOp.getCallee();
+//   mlir::ModuleOp module_op = llvm::dyn_cast<mlir::ModuleOp>(
+//       callee.getParentRegion()->getParentOp()->getParentOp());
+//   auto calleeFuncOp = module_op.lookupSymbol<func::FuncOp>(callee_name);
+//   mlir::Block *callee_block = &calleeFuncOp.getBlocks().front();
+//   mlir::Region &calleeFuncOpRegion = calleeFuncOp.getBody();
+//   callee_block->without_terminator();
+//   mlir::Operation *callee_ptr = calleeOp;
+//   mlir::Block *inlineBlock = callee.getParentBlock();
+//   mlir::Block *postinlineBlock =
+//       inlineBlock->splitBlock(callee_ptr->getIterator());
+
+//   inlineBlock->getParent()->getBlocks().splice(
+//       postinlineBlock->getIterator(), calleeFuncOpRegion.getBlocks(),
+//       calleeFuncOpRegion.begin(), calleeFuncOpRegion.end());
+//   auto newBlocks = llvm::make_range(std::next(inlineBlock->getIterator()),
+//                                     postinlineBlock->getIterator());
+
+//   Block *firstNewBlock = &*newBlocks.begin();
+
+//   auto *firstBlockTerminator = firstNewBlock->getTerminator();
+//   rewriter.eraseOp(firstBlockTerminator);
+//   firstNewBlock->getOperations().splice(firstNewBlock->end(),
+//                                           postinlineBlock->getOperations());
+
+//   rewriter.mergeBlocks(firstNewBlock, inlineBlock, input);
+//   inlineBlock->print(llvm::outs());
+//   // rewriter.eraseBlock(postinlineBlock);
+//   // rewriter.eraseOp(calleeFuncOp);
+//   llvm::outs() << "callee: "
+//                << "\n";
+//   module_op.print(llvm::outs());
+//   // return rewriter.create<mhlo::AbsOp>(callee.getLoc(), input);
+// }
+
+// mlir::Block *imd_blk = rewriter.createBlock(postinlineBlock);
+// // rewriter.mergeBlocks(callee_block, imd_blk, input);
+
+// imd_blk->print(llvm::outs());
+
+// inlineBlock->getParent()->getBlocks().splice(
+//     postinlineBlock->getIterator(), calleeFuncOpRegion.getBlocks(),
+//     calleeFuncOpRegion.begin(), calleeFuncOpRegion.end());
+// auto newBlocks = llvm::make_range(std::next(inlineBlock->getIterator()),
+//                                   postinlineBlock->getIterator());
+
+// Block *firstNewBlock = &*newBlocks.begin();
+// auto *firstBlockTerminator = firstNewBlock->getTerminator();
+// rewriter.eraseOp(firstBlockTerminator);
+
+// rewriter.mergeBlocks(firstNewBlock, inlineBlock, input);
+// rewriter.mergeBlocks(postinlineBlock, inlineBlock, input);
+
+// inlineBlock->print(llvm::outs());
+// inlineBlock->walk([&](func::CallOp op) {
+//   op.erase();
+// });
+
+// rewriter.mergeBlockBefore();
+// calleeFuncOpRegion.begin()->print(llvm::outs());
+
+// mlir::Operation *callee_ptr = calleeOp;
+// mlir::Block *inlineBlock = callee.getParentBlock();
+// mlir::Block *postinlineBlock =
+//     rewriter.splitBlock(inlineBlock, callee_ptr->getIterator());
+// postinlineBlock->print(llvm::outs());
+
+// rewriter.inlineRegionBefore(calleeFuncOpRegion, postinlineBlock);
+// mlir::Block *interm_b = &*std::next(inlineBlock->getIterator());
+// rewriter.eraseOp(interm_b->getTerminator());
+
+// rewriter.mergeBlocks(inlineBlock, postinlineBlock);
+// rewriter.mergeBlocks(interm_b, postinlineBlock);
+// // rewriter.mergeBlocks(interm_b, inlineBlock, input);
+// // rewriter.mergeBlocks(postinlineBlock, inlineBlock);
+
+// postinlineBlock->print(llvm::outs());
+// rewriter.mergeBlockBefore(inlineBlock, calleeOp);
+// rewriter.mergeBlockBefore(interm_b, calleeOp, input);
+
+// postinlineBlock->print(llvm::outs());
+
+// mlir::Block *callee_block = &calleeFuncOp.getBlocks().front();

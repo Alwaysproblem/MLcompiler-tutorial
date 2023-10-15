@@ -18,14 +18,9 @@ Rewrite RegionOf(callee: Value, input: Value) [{
 Pattern InlinePdllOptPattern with benefit(1) {
   // ** match section ** //
   let callee = op<func.call>(arg: Value) {callee = attr<"@tanh_function">};
-  // let callee = op<mhlo.exponential>(arg: Value);
   // ** rewrite section ** //
-  // replace callee with op<mhlo.log>(arg);
-  // replace callee with RegionOf(callee, arg);
   rewrite callee with {
     RegionOf(callee, arg);
-    // let callee_func = RegionOf(callee, arg);
-    // erase callee_func;
-    // erase callee;
+    erase callee;
   };
 }
