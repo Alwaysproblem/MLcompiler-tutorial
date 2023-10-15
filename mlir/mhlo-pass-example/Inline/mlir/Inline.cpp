@@ -45,7 +45,7 @@ void RegionOfFunc(mlir::PatternRewriter &rewriter, mlir::Value callee,
   mlir::Value term_oper = term->getOperands().front();
   rewriter.eraseOp(interm_b->getTerminator());
   rewriter.mergeBlockBefore(interm_b, calleeOp, input);
-  inlineBlock->getTerminator()->getOpOperands().front().set(term_oper);
+  calleeOp.getResults().front().replaceAllUsesWith(term_oper);
   rewriter.eraseOp(calleeFuncOp);
 }
 
