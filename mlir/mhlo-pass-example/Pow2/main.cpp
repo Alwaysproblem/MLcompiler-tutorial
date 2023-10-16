@@ -83,6 +83,7 @@ int main(int argc, char *argv[]) {
     // pm.addNestedPass<mlir::func::FuncOp>(mlir::createCanonicalizerPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         mlir::mhlo::createSubstitutePow2Pass());
+    pm.addNestedPass<mlir::func::FuncOp>(mlir::mhlo::createStaticOpCounter());
 
     if (mlir::failed(pm.run(*module)))
       return 4;

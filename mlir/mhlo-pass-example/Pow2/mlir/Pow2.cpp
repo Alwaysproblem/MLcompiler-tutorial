@@ -6,7 +6,9 @@
 #include <mlir/Pass/Pass.h>
 #include <mlir/Transforms/DialectConversion.h>
 
+#include <llvm/Support/Format.h>
 #include <llvm/Support/raw_ostream.h>
+#include <mlir/Analysis/CallGraph.h>
 #include <mlir/IR/Builders.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/IR/PatternMatch.h>
@@ -115,4 +117,79 @@ std::unique_ptr<mlir::Pass> mhlo::createSubstitutePow2Pass() {
   // return std::make_unique<SubstitutePow2PdllPass>();
   // 3. use tddr to generate pass declaration.
   return std::make_unique<SubstitutePow2PdllPass>();
+}
+
+/// An interesting analysis.
+struct StaticOpCounterAnalysis {
+  llvm::StringMap<int> opCount;
+  // Compute this analysis with the provided operation.
+  StaticOpCounterAnalysis(Operation *op) : opCount({}){};
+
+  void add(Operation *op) {
+    auto opName = op->getName().getStringRef();
+    opCount.find(opName) == opCount.end()
+        ? opCount[opName] = 1
+        : opCount[opName] = opCount[opName] + 1;
+  }
+
+  llvm::StringMap<int> getOpCount() const { return opCount; };
+};
+
+struct StaticOpCounterAnalysisWithDependency {
+  StaticOpCounterAnalysisWithDependency(Operation *op, AnalysisManager &am) {
+    // Request other analysis as dependency
+    StaticOpCounterAnalysis &otherAnalysis =
+        am.getAnalysis<StaticOpCounterAnalysis>();
+  }
+
+  bool isInvalidated(const AnalysisManager::PreservedAnalyses &pa) {
+    // Check if analysis or its dependency were invalidated
+    return !pa.isPreserved<StaticOpCounterAnalysisWithDependency>() ||
+           !pa.isPreserved<StaticOpCounterAnalysis>();
+  }
+};
+
+namespace {
+struct StaticOpCounter
+    : public PassWrapper<StaticOpCounter, OperationPass<func::FuncOp>> {
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(StaticOpCounter)
+
+  void runOnOperation() final;
+};
+} // namespace
+
+void StaticOpCounter::runOnOperation() {
+  StaticOpCounterAnalysis &myAnalysis = getAnalysis<StaticOpCounterAnalysis>();
+  auto module_op = getOperation();
+  for (auto &op : module_op.getOps()) {
+    myAnalysis.add(&op);
+  }
+
+  llvm::outs() << "================================================="
+               << "\n";
+  llvm::outs() << "MLIR-PASS-TUTOR: static analysis results\n";
+  llvm::outs() << "=================================================\n";
+  const char *str1 = "NAME";
+  const char *str2 = "#N DIRECT CALLS";
+  llvm::outs() << llvm::format("%-20s %-10s\n", str1, str2);
+  llvm::outs() << "-------------------------------------------------"
+               << "\n";
+  for (auto &CallCount : myAnalysis.getOpCount()) {
+    llvm::outs() << llvm::format("%-20s %-10lu\n",
+                                 CallCount.first().str().c_str(),
+                                 CallCount.getValue());
+  }
+
+  llvm::outs() << "-------------------------------------------------"
+               << "\n\n";
+}
+
+std::unique_ptr<mlir::Pass> mhlo::createStaticOpCounter() {
+  // There are 2 methods to achieve the same goal:
+  // 1. use the tddr rules to rewrite the IR
+  // return std::make_unique<SubstitutePow2Pass>();
+  // 2. use the pdll to rewrite the IR
+  // return std::make_unique<SubstitutePow2PdllPass>();
+  // 3. use tddr to generate pass declaration.
+  return std::make_unique<StaticOpCounter>();
 }
