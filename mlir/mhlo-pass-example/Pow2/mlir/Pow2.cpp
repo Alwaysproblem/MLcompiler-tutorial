@@ -86,10 +86,33 @@ void SubstitutePow2PdllPass::runOnOperation() {
     signalPassFailure();
 }
 
+namespace {
+#define GEN_PASS_DEF_POW2PASS
+#include "Pow2Pass.inc"
+} // namespace
+
+namespace {
+struct SubstitutePow2PdllGenPass
+    : impl::Pow2PassBase<SubstitutePow2PdllGenPass> {
+  void runOnOperation() final {
+    auto op = getOperation();
+    RewritePatternSet patterns(&getContext());
+    // --- insert the native constraints ---
+    registerNativeConstraints(patterns);
+    // --- insert the native constraints ---
+    patterns.add<Pow2PdllOptPattern>(&getContext());
+    if (failed(applyPatternsAndFoldGreedily(op, std::move(patterns))))
+      signalPassFailure();
+  };
+};
+} // namespace
+
 std::unique_ptr<mlir::Pass> mhlo::createSubstitutePow2Pass() {
   // There are 2 methods to achieve the same goal:
   // 1. use the tddr rules to rewrite the IR
   // return std::make_unique<SubstitutePow2Pass>();
   // 2. use the pdll to rewrite the IR
+  // return std::make_unique<SubstitutePow2PdllPass>();
+  // 3. use tddr to generate pass declaration.
   return std::make_unique<SubstitutePow2PdllPass>();
 }
