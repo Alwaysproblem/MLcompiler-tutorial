@@ -180,6 +180,33 @@ the backward value with `add` backward rule. Inputs of backward are `primals = (
 
 4. obtain the output `(2.7177599838802657 [forward], 2.979984993200891 [backward])`
 
+Here is a simplest implementation for illustrations:
+
+```python
+import math
+
+def add(x, y, dx=0, dy=0):
+  return x + y, dx + dy
+
+def mul(x, y, dx=0, dy=0):
+  return x * y, y * dx + dy * x
+
+def sin(x):
+  return math.sin(x), math.cos(x)
+
+def neg(x, dx):
+  return -x, -dx
+
+def f_grad(x, dx):
+  a, da = sin(x)
+  b, db = mul(a, 2, da, 0) # The grad of constants is 0 so the dy for mul is 0.
+  c, dc = neg(b, db)
+  d, dd = add(c, x, dc, dx)
+  return d, dd
+
+print(f_grad(3, 1))
+```
+
 the code example from the Jax document is in the `jax-core/jax_core.py` you can debug for free.
 
 ### Jax (not with jit) for xla lowering call stack
