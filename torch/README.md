@@ -370,7 +370,7 @@ class joint_helper(torch.nn.Module):
 **Note that: the mm (aten.mm) and sfdp (attention compute unit) will be registed or compile in the `lazy_init` function, this is the same as `jit.script` and `jit.trace`.**
 
 
-
+```
 compile_fx_inner
   fx_codegen_and_compile
     GraphLowering().run()
@@ -379,6 +379,7 @@ compile_fx_inner
       _register_lowering
     compiled_fn = graph.compile_to_fn()
       graph.compile_to_module().call
+```
 
 python source code:
 
