@@ -23,7 +23,7 @@ update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 20
 conda create -n mlir -y
 conda activate mlir
 # conda install cmake ninja clang-format clang lld ncurses mlir llvm -c conda-forge
-conda install cmake ninja clang-format clang mlir zlib spdlog fmt lit llvm=17.* -c conda-forge -y
+conda install cmake ninja clang-format clang clang-tools mlir zlib spdlog fmt lit llvm=17.* -c conda-forge -y
 # create -n mlir cmake ninja clang-format clang mlir zlib spdlog fmt lit llvm -c conda-forge -y
 ```
 
