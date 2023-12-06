@@ -3,14 +3,10 @@
   "cmake.debugConfig": {
       "cwd": "${workspaceFolder}",
       "args": [
-        // "-emit=poplar-jit",
-        // "--mlir-print-ir-before-all",
-        // "popir-Ch5/example.toy"
-        "popit-example/example.phlo.mlir"
       ]
   },
-  // "cmake.cmakePath": "/root/anaconda3/envs/popir-16/bin/cmake",
-  "cmake.cmakePath": "/root/anaconda3/envs/mhlo/bin/cmake",
+  // "cmake.cmakePath": "/root/miniconda3/envs/popir-16/bin/cmake",
+  "cmake.cmakePath": "/root/miniconda3/envs/mhlo/bin/cmake",
   "files.associations": {
     "*.py": "python",
     "*.mmd": "mermaid",
@@ -91,7 +87,6 @@
   },
   "cmake.configureArgs": [
     "-Wno-dev",
-    "-DPOPLAR_SDK_PATH=/mnt/data/yongxiy/sdk/poplar_sdk-ubuntu_22_04-4.0.0-EA.1+1470-57b10c9c54/poplar-ubuntu_22_04-4.0.0+297-47cb419b85",
 
     // This is for non-conda users.
     // "-DMLIR_DIR=${workspaceFolder}/third_party/llvm/lib/cmake/mlir",
@@ -101,19 +96,19 @@
     // "-DMLIR_TABLEGEN_EXE=${workspaceFolder}/third_party/llvm/bin/mlir-tblgen",
 
     // This is for conda users.
-    "-DMLIR_TABLEGEN_EXEUTABLE:FILEPATH=/root/anaconda3/envs/mhlo/bin/mlir-tblgen",
-    "-DCMAKE_MODULE_PATH=/root/anaconda3/envs/mhlo/lib/cmake/mlir;/root/anaconda3/envs/mhlo/lib/cmake/llvm;${workspaceFolder}/third_party/mhlo/lib/cmake/mlir-hlo",
+    "-DMLIR_TABLEGEN_EXEUTABLE:FILEPATH=/root/miniconda3/envs/mhlo/bin/mlir-tblgen",
+    "-DCMAKE_MODULE_PATH=/root/miniconda3/envs/mhlo/lib/cmake/mlir;/root/miniconda3/envs/mhlo/lib/cmake/llvm;${workspaceFolder}/third_party/mhlo/lib/cmake/mlir-hlo",
     "-DMHLO_DIR=${workspaceFolder}/third_party/mhlo/lib/cmake/mlir-hlo",
   ],
   // "cmake.environment": {
-  //   "LD_LIBRARY_PATH": "/root/anaconda3/envs/mlir/x86_64-conda-linux-gnu/lib:${env.LD_LIBRARY_PATH}"
+  //   "LD_LIBRARY_PATH": "/root/miniconda3/envs/mlir/x86_64-conda-linux-gnu/lib:${env.LD_LIBRARY_PATH}"
   // },
-  // "C_Cpp.clang_format_path": "${env.HOME}/anaconda3/envs/popir-16/bin/clang-format",
-  // "C_Cpp.codeAnalysis.clangTidy.path": "${env.HOME}/anaconda3/envs/popir-16/bin/clang-tidy",
-  // "cmakeFormat.exePath": "/root/anaconda3/envs/popir-16/bin/cmake-format",
-  "C_Cpp.clang_format_path": "${env.HOME}/anaconda3/envs/mhlo/bin/clang-format",
-  "C_Cpp.codeAnalysis.clangTidy.path": "${env.HOME}/anaconda3/envs/mhlo/bin/clang-tidy",
-  "cmakeFormat.exePath": "/root/anaconda3/envs/mhlo/bin/cmake-format",
+  // "C_Cpp.clang_format_path": "${env.HOME}/miniconda3/envs/popir-16/bin/clang-format",
+  // "C_Cpp.codeAnalysis.clangTidy.path": "${env.HOME}/miniconda3/envs/popir-16/bin/clang-tidy",
+  // "cmakeFormat.exePath": "/root/miniconda3/envs/popir-16/bin/cmake-format",
+  "C_Cpp.clang_format_path": "${env.HOME}/miniconda3/envs/mhlo/bin/clang-format",
+  "C_Cpp.codeAnalysis.clangTidy.path": "${env.HOME}/miniconda3/envs/mhlo/bin/clang-tidy",
+  "cmakeFormat.exePath": "/root/miniconda3/envs/mhlo/bin/cmake-format",
   "C_Cpp.errorSquiggles": "enabled",
   "C_Cpp.clang_format_sortIncludes": true,
   "C_Cpp.codeAnalysis.clangTidy.enabled": true,

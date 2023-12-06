@@ -2,14 +2,7 @@
   "configurations": [
       {
           "name": "Linux",
-          "includePath": [
-              "/mnt/data/yongxiy/sdk/poplar_sdk-ubuntu_22_04-4.0.0-EA.1+1470-57b10c9c54/poplar-ubuntu_22_04-4.0.0+297-47cb419b85//include",
-              // "/mnt/data/yongxiy/sdk/poplar_sdk-ubuntu_22_04-4.0.0-EA.1+1430-7074b03487/poplar-ubuntu_22_04-4.0.0+2529-cf197dd9a8/include",
-              // "/mnt/data/yongxiy/sdk/poplar_sdk-ubuntu_22_04-4.0.0-EA.1+1402-7e2e71910d/poplar-ubuntu_22_04-4.0.0+2160-7bc3baa9b5/include",
-              // "/mnt/data/yongxiy/sdk/poplar_sdk-ubuntu_22_04-4.0.0-EA.1+1353-4d963d95dc/poplar-ubuntu_22_04-4.0.0+1674-b614bfcacf/include",
-              // "/mnt/data/yongxiy/sdk/poplar_sdk-ubuntu_22_04-4.0.0-EA.1+1379-860150aee7/poplar-ubuntu_22_04-4.0.0+1987-6f863be616/include/"
-              // "${workspaceFolder}/../unpacked/poplar/poplar-ubuntu_20_04-3.3.0+7726-8e07f7a105/include"
-          ],
+          "includePath": [],
           "defines": [],
           "compilerPath": "/usr/bin/gcc",
           "cStandard": "c11",

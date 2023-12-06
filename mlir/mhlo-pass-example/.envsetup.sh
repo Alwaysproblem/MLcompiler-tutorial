@@ -1,1 +1,1 @@
-source /root/anaconda3/etc/profile.d/conda.sh && conda activate mhlo
+source /root/miniconda3/etc/profile.d/conda.sh && conda activate mhlo
