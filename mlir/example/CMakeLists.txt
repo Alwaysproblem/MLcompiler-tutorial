@@ -6,7 +6,7 @@ project(mlir-example LANGUAGES C CXX)
 # ############## For conda users.################################
 find_package(LLVM CONFIG REQUIRED)
 find_package(MLIR CONFIG REQUIRED)
-set(MLIR_TABLEGEN_EXE /root/anaconda3/envs/mlir/bin/mlir-tblgen)
+# set(MLIR_TABLEGEN_EXE /root/anaconda3/envs/mlir/bin/mlir-tblgen)
 # ##############################################################################
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
