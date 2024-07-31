@@ -9,6 +9,95 @@ iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runti
 main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
 ```
 
+## Type registration
+
+In the `iree_runtime_instance_create` function will register the type:
+
+- `vm.buffer`
+- `vm.list`
+- `hal.allocator`
+- `hal.channel`
+- `hal.command_buffer`
+- `hal.descriptor_set_layout`
+- `hal.device`
+- `hal.event`
+- `hal.fence`
+- `hal.file`
+- `hal.pipeline_layout`
+- `hal.semaphore`
+
+## Device Creation
+
+```text
+main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
+iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
+iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:125)
+iree_runtime_instance_try_create_default_device(iree_runtime_instance_t * instance, iree_string_view_t driver_name, iree_hal_device_t ** out_device) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/instance.c:158)
+iree_hal_driver_registry_try_create(iree_hal_driver_registry_t * registry, iree_string_view_t driver_name, iree_allocator_t host_allocator, iree_hal_driver_t ** out_driver) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/driver_registry.c:314)
+iree_hal_local_task_driver_factory_try_create(void * self, iree_string_view_t driver_name, iree_allocator_t host_allocator, iree_hal_driver_t ** out_driver) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/local_task/registration/driver_module.c:64)
+iree_hal_task_driver_create@runtime/src/iree/hal/drivers/local_task/task_driver.c:37
+```
+
+Here will register the `iree_hal_driver_vtable_t` into `iree_hal_resource_t` in `driver->resource`
+
+```cpp
+static const iree_hal_driver_vtable_t iree_hal_task_driver_vtable = {
+    .destroy = iree_hal_task_driver_destroy,
+    .query_available_devices = iree_hal_task_driver_query_available_devices,
+    .dump_device_info = iree_hal_task_driver_dump_device_info,
+    .create_device_by_id = iree_hal_task_driver_create_device_by_id,
+    .create_device_by_path = iree_hal_task_driver_create_device_by_path,
+};
+```
+
+
+### create default device
+
+call the function `create_device_by_id` after registering the driver in the function `iree_hal_local_task_driver_factory_try_create`
+
+```text
+iree_hal_task_driver_create_device_by_id@runtime/src/iree/hal/drivers/local_task/task_driver.c:147
+iree_hal_task_device_create@runtime/src/iree/hal/drivers/local_task/task_device.c:85
+```
+
+Here will register the `iree_hal_device_vtable_t` into `iree_hal_resource_t` in `device->resource`
+
+```cpp
+static const iree_hal_device_vtable_t iree_hal_task_device_vtable = {
+    .destroy = iree_hal_task_device_destroy,
+    .id = iree_hal_task_device_id,
+    .host_allocator = iree_hal_task_device_host_allocator,
+    .device_allocator = iree_hal_task_device_allocator,
+    .replace_device_allocator = iree_hal_task_replace_device_allocator,
+    .replace_channel_provider = iree_hal_task_replace_channel_provider,
+    .trim = iree_hal_task_device_trim,
+    .query_i64 = iree_hal_task_device_query_i64,
+    .create_channel = iree_hal_task_device_create_channel,
+    .create_command_buffer = iree_hal_task_device_create_command_buffer,
+    .create_descriptor_set_layout =
+        iree_hal_task_device_create_descriptor_set_layout,
+    .create_event = iree_hal_task_device_create_event,
+    .create_executable_cache = iree_hal_task_device_create_executable_cache,
+    .import_file = iree_hal_task_device_import_file,
+    .create_pipeline_layout = iree_hal_task_device_create_pipeline_layout,
+    .create_semaphore = iree_hal_task_device_create_semaphore,
+    .query_semaphore_compatibility =
+        iree_hal_task_device_query_semaphore_compatibility,
+    .queue_alloca = iree_hal_task_device_queue_alloca,
+    .queue_dealloca = iree_hal_task_device_queue_dealloca,
+    .queue_read = iree_hal_task_device_queue_read,
+    .queue_write = iree_hal_task_device_queue_write,
+    .queue_execute = iree_hal_task_device_queue_execute,
+    .queue_flush = iree_hal_task_device_queue_flush,
+    .wait_semaphores = iree_hal_task_device_wait_semaphores,
+    .profiling_begin = iree_hal_task_device_profiling_begin,
+    .profiling_flush = iree_hal_task_device_profiling_flush,
+    .profiling_end = iree_hal_task_device_profiling_end,
+};
+```
+
+After this, it will also initialize the buffer, queue, memory block pool, and loaders.
+
 ## System Library Loader
 
 ```text
@@ -282,35 +371,202 @@ iree_hal_elf_executable_query_library@runtime/src/iree/hal/local/loaders/embedde
 
 Q: I can not find the implementation of the `iree_hal_executable_library_query` function.
 
+## VMVX Loader
 
-
-## device create
+### Initalize the vm module
 
 ```text
-iree_hal_local_task_driver_factory_try_create(void * self, iree_string_view_t driver_name, iree_allocator_t host_allocator, iree_hal_driver_t ** out_driver) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/local_task/registration/driver_module.c:68)
-iree_hal_driver_registry_try_create(iree_hal_driver_registry_t * registry, iree_string_view_t driver_name, iree_allocator_t host_allocator, iree_hal_driver_t ** out_driver) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/driver_registry.c:314)
-iree_runtime_instance_try_create_default_device(iree_runtime_instance_t * instance, iree_string_view_t driver_name, iree_hal_device_t ** out_device) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/instance.c:158)
-iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:125)
-iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
 main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
+iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
+iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:125)
+iree_runtime_instance_try_create_default_device(iree_runtime_instance_t * instance, iree_string_view_t driver_name, iree_hal_device_t ** out_device) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/instance.c:158)
+iree_hal_driver_registry_try_create(iree_hal_driver_registry_t * registry, iree_string_view_t driver_name, iree_allocator_t host_allocator, iree_hal_driver_t ** out_driver) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/driver_registry.c:314)
+iree_hal_local_task_driver_factory_try_create(void * self, iree_string_view_t driver_name, iree_allocator_t host_allocator, iree_hal_driver_t ** out_driver) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/local_task/registration/driver_module.c:71)
+iree_hal_create_all_available_executable_loaders(iree_hal_executable_plugin_manager_t * plugin_manager, iree_host_size_t capacity, iree_host_size_t * out_count, iree_hal_executable_loader_t ** loaders, iree_allocator_t host_allocator) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/local/loaders/registration/init.c:69)
+iree_hal_vmvx_module_loader_create_isolated(iree_host_size_t user_module_count, iree_vm_module_t ** user_modules, iree_allocator_t host_allocator, iree_hal_executable_loader_t ** out_executable_loader) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/local/loaders/vmvx_module_loader.c:620)
+iree_hal_vmvx_module_loader_create(iree_vm_instance_t * instance, iree_host_size_t user_module_count, iree_vm_module_t ** user_modules, iree_allocator_t host_allocator, iree_hal_executable_loader_t ** out_executable_loader) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/local/loaders/vmvx_module_loader.c:572)
+iree_vmvx_module_create(iree_vm_instance_t * instance, iree_allocator_t host_allocator, iree_vm_module_t ** out_module) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/modules/vmvx/module.c:808)
+iree_vm_native_module_initialize(const iree_vm_module_t * module_interface, const iree_vm_native_module_descriptor_t * module_descriptor, iree_vm_instance_t * instance, iree_allocator_t allocator, iree_vm_module_t * base_module) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:488)
 ```
 
-## Load module
+In here, the `iree_hal_vmvx_module_loader_create` function will create the executable loader for the vmvx module.
+copy the `iree_hal_vmvx_module_loader_vtable` to the `iree_hal_executable_loader_t` structure.
+
+```cpp
+static const iree_hal_executable_loader_vtable_t
+    iree_hal_vmvx_module_loader_vtable = {
+        .destroy = iree_hal_vmvx_module_loader_destroy,
+        .query_support = iree_hal_vmvx_module_loader_query_support,
+        .try_load = iree_hal_vmvx_module_loader_try_load,
+};
+```
+
+Here, initalize the vm module and assign the interface to the module.
+
+```cpp
+  // Base interface that routes through our thunks.
+  iree_vm_module_initialize(&module->base_interface, module);
+  module->base_interface.destroy = iree_vm_native_module_destroy;
+  module->base_interface.name = iree_vm_native_module_name;
+  module->base_interface.signature = iree_vm_native_module_signature;
+  module->base_interface.get_module_attr =
+      iree_vm_native_module_get_module_attr;
+  module->base_interface.enumerate_dependencies =
+      iree_vm_native_module_enumerate_dependencies;
+  module->base_interface.lookup_function =
+      iree_vm_native_module_lookup_function;
+  module->base_interface.get_function = iree_vm_native_module_get_function;
+  module->base_interface.get_function_attr =
+      iree_vm_native_module_get_function_attr;
+  module->base_interface.alloc_state = iree_vm_native_module_alloc_state;
+  module->base_interface.free_state = iree_vm_native_module_free_state;
+  module->base_interface.resolve_import = iree_vm_native_module_resolve_import;
+  module->base_interface.notify = iree_vm_native_module_notify;
+  module->base_interface.begin_call = iree_vm_native_module_begin_call;
+  module->base_interface.resume_call = iree_vm_native_module_resume_call;
+```
+
+### hal executable loader initialization
+
+```text
+iree_hal_vmvx_module_loader_try_load@runtime/src/iree/hal/local/loaders/vmvx_module_loader.c:655
+iree_vm_bytecode_module_create@runtime/src/iree/vm/bytecode/module.c:799
+```
+
+Here do the following things:
+
+1. check the flatbuffer is valid
+2. initalized the model function pointer:
+
+```cpp
+  iree_vm_module_initialize(&module->interface, module);
+  module->interface.destroy = iree_vm_bytecode_module_destroy;
+  module->interface.name = iree_vm_bytecode_module_name;
+  module->interface.signature = iree_vm_bytecode_module_signature;
+  module->interface.get_module_attr = iree_vm_bytecode_module_get_module_attr;
+  module->interface.enumerate_dependencies =
+      iree_vm_bytecode_module_enumerate_dependencies;
+  module->interface.lookup_function = iree_vm_bytecode_module_lookup_function;
+  module->interface.get_function = iree_vm_bytecode_module_get_function;
+  module->interface.get_function_attr =
+      iree_vm_bytecode_module_get_function_attr;
+#if IREE_VM_BACKTRACE_ENABLE
+  module->interface.resolve_source_location =
+      iree_vm_bytecode_module_resolve_source_location;
+#endif  // IREE_VM_BACKTRACE_ENABLE
+  module->interface.alloc_state = iree_vm_bytecode_module_alloc_state;
+  module->interface.free_state = iree_vm_bytecode_module_free_state;
+  module->interface.resolve_import = iree_vm_bytecode_module_resolve_import;
+  module->interface.notify = iree_vm_bytecode_module_notify;
+  module->interface.begin_call = iree_vm_bytecode_module_begin_call;
+  module->interface.resume_call = iree_vm_bytecode_module_resume_call;
+
+```
+
+### create hal executable
+
+```text
+iree_hal_vmvx_module_loader_try_load@runtime/src/iree/hal/local/loaders/vmvx_module_loader.c:655
+iree_hal_vmvx_executable_create@runtime/src/iree/hal/local/loaders/vmvx_module_loader.c:215
+```
+
+Here assign the `iree_hal_local_executable_vtable_t` to `iree_hal_vmvx_executable_t` structure.
+
+```cpp
+static const iree_hal_local_executable_vtable_t
+    iree_hal_vmvx_executable_vtable = {
+        .base =
+            {
+                .destroy = iree_hal_vmvx_executable_destroy,
+            },
+        .issue_call = iree_hal_vmvx_executable_issue_call,
+};
+```
+
+and then Find all the entry points and move them to `entry_fn_ordinals` field in the executable.
+after that, Query the optional local workgroup size from each entry point.
+Finally, Initialize a context per worker requested.
 
 
-run the init function in the vm module.
+## Create a session
+
+```text
+main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
+iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
+iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:135)
+iree_runtime_session_create_with_device(iree_runtime_instance_t * instance, const iree_runtime_session_options_t * options, iree_hal_device_t * device, iree_allocator_t host_allocator, iree_runtime_session_t ** out_session) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:94)
+```
+
+Here:
+
+1. Create a session with empty vm context.
+2. Add the HAL initialized module
+3. VM context register HAL modules
+
+  1. iree hal resource initialize
+
+  ```text
+  main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
+  iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
+  iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:135)
+  iree_runtime_session_create_with_device(iree_runtime_instance_t * instance, const iree_runtime_session_options_t * options, iree_hal_device_t * device, iree_allocator_t host_allocator, iree_runtime_session_t ** out_session) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:102)
+  iree_vm_context_register_modules(iree_vm_context_t * context, iree_host_size_t module_count, iree_vm_module_t ** modules) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:501)
+  iree_vm_native_module_alloc_state(void * self, iree_allocator_t allocator, iree_vm_module_state_t ** out_module_state) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:295) <- Here is called by `module->alloc_state`
+  iree_hal_module_alloc_state(void * self, iree_allocator_t host_allocator, iree_vm_module_state_t ** out_module_state) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/modules/hal/module.c:103)
+  iree_hal_executable_cache_create(iree_hal_device_t * device, iree_string_view_t identifier, iree_loop_t loop, iree_hal_executable_cache_t ** out_executable_cache) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/executable_cache.c:37)
+  iree_hal_task_device_create_executable_cache(iree_hal_device_t * base_device, iree_string_view_t identifier, iree_loop_t loop, iree_hal_executable_cache_t ** out_executable_cache) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/local_task/task_device.c:350)
+  iree_hal_local_executable_cache_create(iree_string_view_t identifier, iree_host_size_t worker_capacity, iree_host_size_t loader_count, iree_hal_executable_loader_t ** loaders, iree_allocator_t host_allocator, iree_hal_executable_cache_t ** out_executable_cache) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/local/local_executable_cache.c:49)
+  ```
+
+  Here the `iree_hal_resource_initialize` will register the vtable `iree_hal_executable_cache_vtable_t` into the `executable_cache->resource`
+
+  ```cpp
+  static const iree_hal_executable_cache_vtable_t
+      iree_hal_local_executable_cache_vtable = {
+          .destroy = iree_hal_local_executable_cache_destroy,
+          .can_prepare_format =
+              iree_hal_local_executable_cache_can_prepare_format,
+          .prepare_executable =
+              iree_hal_local_executable_cache_prepare_executable,
+  };
+  ```
+
+  For `iree_hal_local_executable_cache_can_prepare_format` function, it just prepare the executable format like "embedded-elf-<targe>" strings.
+  For `iree_hal_executable_loader_try_load` function, it will try to load the executable from the loader.
+
+  1. vm context resolve module imports
+
+  ```text
+  main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
+  iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
+  iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:135)
+  iree_runtime_session_create_with_device(iree_runtime_instance_t * instance, const iree_runtime_session_options_t * options, iree_hal_device_t * device, iree_allocator_t host_allocator, iree_runtime_session_t ** out_session) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:102)
+  iree_vm_context_register_modules(iree_vm_context_t * context, iree_host_size_t module_count, iree_vm_module_t ** modules) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:501)
+  iree_vm_context_resolve_module_imports@runtime/src/iree/vm/context.c:160
+  ```
+
+     1. Check module presence/versions before individual imports.
+     2. Find the symbol that we can call using the `lookup_function` function.
+
+4. Run the `@__init` Funtion in the vm module.
 
 ```text
 main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
 iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
 iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:135)
 iree_runtime_session_create_with_device(iree_runtime_instance_t * instance, const iree_runtime_session_options_t * options, iree_hal_device_t * device, iree_allocator_t host_allocator, iree_runtime_session_t ** out_session) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:102)
-iree_vm_context_register_modules(iree_vm_context_t * context, iree_host_size_t module_count, iree_vm_module_t ** modules) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:525) <- register the module and run the `@__init` function in the vm module.
+iree_vm_context_register_modules(iree_vm_context_t * context, iree_host_size_t module_count, iree_vm_module_t ** modules) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:525)
+iree_vm_context_run_function(iree_vm_context_t * context, iree_vm_stack_t * stack, iree_vm_module_t * module, iree_string_view_t function_name) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:73) <-- Here run the `@__init` function in the vm module.
 ```
 
+But, for HAL modules, it will not run the `@__init` function since there is no such function in the HAL module.
+
+5. iree_vm_context_resolve_module_state: find and assign the module state to the `hal_module_state`.
+
+## Load module
 
 iree_runtime_session_append_bytecode_module_from_memory@runtime/src/iree/runtime/demo/hello_world_terse.c:57
-  -> iree_vm_bytecode_module_create@runtime/src/iree/runtime/session.c:214
+  -> iree_vm_bytecode_module_create@runtime/src/iree/vm/bytecode/module.c:799
      1. check the flatbuffer is valid
      2. initalized the model function pointer:
         iree_vm_bytecode_module_destroy
@@ -329,29 +585,228 @@ iree_runtime_session_append_bytecode_module_from_memory@runtime/src/iree/runtime
         iree_vm_bytecode_module_begin_call
         iree_vm_bytecode_module_resume_call
 
+      3. append the module to the session
 
-iree_runtime_call_invoke
-  -> iree_runtime_session_call
-    -> iree_vm_invoke
-      -> iree_vm_begin_invoke@runtime/src/iree/vm/invocation.c:302
-        -> 
-      ->
-
-----
-
-```cpp
-static const iree_hal_executable_loader_vtable_t
-    iree_hal_vmvx_module_loader_vtable = {
-        .destroy = iree_hal_vmvx_module_loader_destroy,
-        .query_support = iree_hal_vmvx_module_loader_query_support,
-        .try_load = iree_hal_vmvx_module_loader_try_load,
-};
+```log
+main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
+iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
+iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:144)
+iree_runtime_demo_load_module(iree_runtime_session_t * session) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:34)
+iree_runtime_session_append_bytecode_module_from_file(iree_runtime_session_t * session, const char * file_path) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:249)
+iree_runtime_session_append_bytecode_module_from_memory(iree_runtime_session_t * session, iree_const_byte_span_t flatbuffer_data, iree_allocator_t flatbuffer_allocator) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:220)
+iree_runtime_session_append_module(iree_runtime_session_t * session, iree_vm_module_t * module) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:197)
+iree_vm_context_register_modules(iree_vm_context_t * context, iree_host_size_t module_count, iree_vm_module_t ** modules) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:437)
 ```
 
-## Run
+This is the same the process in the session creation (`iree_vm_context_register_modules`).
+
+1. The `iree_vm_context_resolve_module_imports` function will check the dependency:
+
+```cpp
+  IREE_RETURN_AND_END_ZONE_IF_ERROR(
+      z0, iree_vm_module_enumerate_dependencies(
+              module, iree_vm_context_check_module_dependency, context));
+```
+
+call frame:
+```log
+main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
+iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
+iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:144)
+iree_runtime_demo_load_module(iree_runtime_session_t * session) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:34)
+iree_runtime_session_append_bytecode_module_from_file(iree_runtime_session_t * session, const char * file_path) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:249)
+iree_runtime_session_append_bytecode_module_from_memory(iree_runtime_session_t * session, iree_const_byte_span_t flatbuffer_data, iree_allocator_t flatbuffer_allocator) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:220)
+iree_vm_context_resolve_module_imports(iree_vm_context_t * context, iree_vm_module_t * module, iree_vm_module_state_t * module_state) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:168)
+iree_runtime_session_append_module(iree_runtime_session_t * session, iree_vm_module_t * module) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:197)
+iree_vm_context_register_modules(iree_vm_context_t * context, iree_host_size_t module_count, iree_vm_module_t ** modules) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:510)
+iree_vm_module_enumerate_dependencies(iree_vm_module_t * module, iree_vm_module_dependency_callback_t callback, void * user_data) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/module.c:278)
+iree_vm_bytecode_module_enumerate_dependencies(void * self, iree_vm_module_dependency_callback_t callback, void * user_data) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/module.c:215)
+iree_vm_context_check_module_dependency(void * user_data_ptr, const iree_vm_module_dependency_t * dependency) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:126)
+```
+
+```log
+# Here is from the dumped vmfb file:
+Module Dependencies:
+  hal, version >= 2, required
+```
+
+This is from the vmfb file that dumped from logs.
+
+2. find the import function with the `iree_vm_native_module_lookup_function` function.
+
+```log
+main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
+iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
+iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:144)
+iree_runtime_demo_load_module(iree_runtime_session_t * session) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:34)
+iree_runtime_session_append_bytecode_module_from_file(iree_runtime_session_t * session, const char * file_path) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:249)
+iree_runtime_session_append_bytecode_module_from_memory(iree_runtime_session_t * session, iree_const_byte_span_t flatbuffer_data, iree_allocator_t flatbuffer_allocator) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:220)
+iree_runtime_session_append_module(iree_runtime_session_t * session, iree_vm_module_t * module) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:197)
+iree_vm_context_resolve_module_imports(iree_vm_context_t * context, iree_vm_module_t * module, iree_vm_module_state_t * module_state) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:190)
+iree_vm_context_register_modules(iree_vm_context_t * context, iree_host_size_t module_count, iree_vm_module_t ** modules) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:510)
+iree_vm_context_resolve_function_impl(const iree_vm_context_t * context, iree_string_view_t full_name, const iree_vm_function_signature_t * expected_signature, iree_vm_function_t * out_function) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:590)
+iree_vm_native_module_lookup_function(void * self, iree_vm_function_linkage_t linkage, iree_string_view_t name, const iree_vm_function_signature_t * expected_signature, iree_vm_function_t * out_function) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:248)
+iree_vm_native_module_get_function(void * self, iree_vm_function_linkage_t linkage, iree_host_size_t ordinal, iree_vm_function_t * out_function, iree_string_view_t * out_name, iree_vm_function_signature_t * out_signature) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:208)
+iree_vm_native_module_get_export_function(iree_vm_native_module_t * module, iree_host_size_t ordinal, iree_vm_function_t * out_function, iree_string_view_t * out_name, iree_vm_function_signature_t * out_signature) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:187)
+```
+
+Here will find the imported function (list below) from the `module->descriptor->exports[ordinal]`
+
+```log
+# Here is from the dumped vmfb file:
+Imported Functions:
+  [  0] hal.buffer.assert(!vm.ref<?>, !vm.ref<?>, !vm.ref<?>, i64, i32, i32) -> ()
+  [  1] hal.buffer_view.create(!vm.ref<?>, i64, i64, i32, i32, tuple<i64>...) -> (!vm.ref<?>)
+  [  2] hal.buffer_view.assert(!vm.ref<?>, !vm.ref<?>, i32, i32, tuple<i64>...) -> ()
+  [  3] hal.buffer_view.buffer(!vm.ref<?>) -> (!vm.ref<?>)
+  [  4] hal.command_buffer.create(!vm.ref<?>, i32, i32, i32) -> (!vm.ref<?>)
+  [  5] hal.command_buffer.finalize(!vm.ref<?>) -> ()
+  [  6] hal.command_buffer.execution_barrier(!vm.ref<?>, i32, i32, i32) -> ()
+  [  7] hal.command_buffer.push_descriptor_set(!vm.ref<?>, !vm.ref<?>, i32, tuple<i32, i32, !vm.ref<?>, i64, i64>...) -> ()
+  [  8] hal.command_buffer.dispatch(!vm.ref<?>, !vm.ref<?>, i32, i32, i32, i32) -> ()
+  [  9] hal.descriptor_set_layout.create(!vm.ref<?>, i32, tuple<i32, i32, i32>...) -> (!vm.ref<?>)
+  [ 10] hal.device.allocator(!vm.ref<?>) -> (!vm.ref<?>)
+  [ 11] hal.device.query.i64(!vm.ref<?>, !vm.ref<?>, !vm.ref<?>) -> (i32, i64)
+  [ 12] hal.device.queue.alloca(!vm.ref<?>, i64, !vm.ref<?>, !vm.ref<?>, i32, i32, i32, i64) -> (!vm.ref<?>)
+  [ 13] hal.device.queue.execute(!vm.ref<?>, i64, !vm.ref<?>, !vm.ref<?>, tuple<!vm.ref<?>>...) -> ()
+  [ 14] hal.devices.get(i32) -> (!vm.ref<?>)
+  [ 15] hal.executable.create(!vm.ref<?>, !vm.ref<?>, !vm.ref<?>, !vm.ref<?>, tuple<!vm.ref<?>>...) -> (!vm.ref<?>)
+  [ 16] hal.fence.create(!vm.ref<?>, i32) -> (!vm.ref<?>)
+  [ 17] hal.fence.await(i32, tuple<!vm.ref<?>>...) -> (i32)
+  [ 18] hal.pipeline_layout.create(!vm.ref<?>, i32, tuple<!vm.ref<?>>...) -> (!vm.ref<?>)
+```
+
+However, the bytecode module has the `@__init` function. so this time will run the `@__init` function in the vm module.
+
+## Call the function
+
+1. prepare the call stack, frame, registers (simulated), and call results.
+2. call the `iree_vm_bytecode_dispatch`
+
+```log
+main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
+iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
+iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:144)
+iree_runtime_demo_load_module(iree_runtime_session_t * session) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:34)
+iree_runtime_session_append_bytecode_module_from_file(iree_runtime_session_t * session, const char * file_path) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:249)
+iree_runtime_session_append_bytecode_module_from_memory(iree_runtime_session_t * session, iree_const_byte_span_t flatbuffer_data, iree_allocator_t flatbuffer_allocator) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:220)
+iree_runtime_session_append_module(iree_runtime_session_t * session, iree_vm_module_t * module) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:197)
+iree_vm_context_register_modules(iree_vm_context_t * context, iree_host_size_t module_count, iree_vm_module_t ** modules) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:525)
+iree_vm_context_run_function(iree_vm_context_t * context, iree_vm_stack_t * stack, iree_vm_module_t * module, iree_string_view_t function_name) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:91)
+iree_vm_bytecode_module_begin_call(void * self, iree_vm_stack_t * stack, iree_vm_function_call_t call) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/module.c:788)
+iree_vm_bytecode_dispatch_begin(iree_vm_stack_t * stack, iree_vm_bytecode_module_t * module, const iree_vm_function_call_t call, iree_string_view_t cconv_arguments, iree_string_view_t cconv_results) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:636)
+iree_vm_bytecode_dispatch(iree_vm_stack_t * restrict stack, iree_vm_bytecode_module_t * restrict module, iree_vm_stack_frame_t * restrict current_frame, iree_vm_registers_t regs, iree_byte_span_t call_results) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:673)
+```
+
+In the `iree_vm_bytecode_dispatch` function, the function will be called by `bytecode_data[pc]`. The `bytecode_data` the enum number of the function, which can be found `runtime/src/iree/vm/bytecode/utils/generated/op_table.h`
+
+`bytedata` pc will be aligned with `uint16_t` 4 bytes.
+
+For example:
+
+before run:
+
+```
+bytedata[0] = `block`
+bytedata[1] = `vm.const.ref.zero`
+
+bytedata[4] = `0xd`: `vm.const.i32`
+bytedata[5] = `2`
+bytedata[6] = `0`
+bytedata[7] = `0`
+bytedata[8] = `0`
+bytedata[9] = `0`
+bytedata[10] = `0`
+bytedata[11] = `0xd`: vm.const.i32
+---
+regs_i32[0] = 0
+regs_i32[1] = 0
+
+```
+
+After run the code unfold with macro:
+  
+```cpp
+// pc = 5
+DISPATCH_OP(CORE, ConstI32, {
+  int32_t value = iree_unaligned_load_le((uint32_t*)&bytecode_data[pc + (0)]);
+  pc += 4;
+  int32_t* result = &regs_i32[iree_unaligned_load_le((uint16_t*)&bytecode_data[pc + (0)])];
+  pc += 2;;
+  *result = value;
+});
+```
+
+This see that value will be the `bytedata[5] = 2`
+and `pc = 9` and then the result will be written
+to the `regs_i32[bytedata[9]]` which is the first register.
+
+For Call operator:
+
+```cpp
+// pc = 49
+bytecode_data[49] = `0x58`: `vm.call`
+bytecode_data[50] = `14`: `function_ordinal` // This is the ordinal number of the "Imported Functions" in the vmfb dumped file.
+// the `%ref = vm.call @hal.devices.get(%zero_0) {live = ["%c-1", "%c1", "%c14", "%c2", "%c7", "%null", "%ref", "%zero", "%zero_0"], nosideeffects, result_registers = ["r1"]} : (i32) -> !vm.ref<!hal.device>` in the vm.mlir file
+*(const iree_vm_register_list_t*)&bytecode_data[54] == {size = 1, registers = 0x555555750f78} : `operands`
+*(const iree_vm_register_list_t*)&bytecode_data[58] == {size = 1, registers = 0x555555750f7c} : `result`
+```
+
+before issue the import call, the cconv argument should be assigned with values:
+the `src_reg_list->registers` will record the caller registers offset.
+
+```cpp
+caller_registers.i32[src_reg_list->registers[0]] == 0 // %zero_0
+```
+
+and call the `hal.devices.get`. Here is the call stack of the running function `hal.devices.get` will be:
+
+```log
+main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
+iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
+iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:144)
+iree_runtime_demo_load_module(iree_runtime_session_t * session) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:34)
+iree_runtime_session_append_bytecode_module_from_file(iree_runtime_session_t * session, const char * file_path) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:249)
+iree_runtime_session_append_bytecode_module_from_memory(iree_runtime_session_t * session, iree_const_byte_span_t flatbuffer_data, iree_allocator_t flatbuffer_allocator) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:220)
+iree_runtime_session_append_module(iree_runtime_session_t * session, iree_vm_module_t * module) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:197)
+iree_vm_context_register_modules(iree_vm_context_t * context, iree_host_size_t module_count, iree_vm_module_t ** modules) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:525)
+iree_vm_context_run_function(iree_vm_context_t * context, iree_vm_stack_t * stack, iree_vm_module_t * module, iree_string_view_t function_name) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:91)
+iree_vm_bytecode_module_begin_call(void * self, iree_vm_stack_t * stack, iree_vm_function_call_t call) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/module.c:788)
+iree_vm_bytecode_dispatch_begin(iree_vm_stack_t * stack, iree_vm_bytecode_module_t * module, const iree_vm_function_call_t call, iree_string_view_t cconv_arguments, iree_string_view_t cconv_results) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:636)
+iree_vm_bytecode_dispatch(iree_vm_stack_t * restrict stack, iree_vm_bytecode_module_t * restrict module, iree_vm_stack_frame_t * restrict current_frame, iree_vm_registers_t regs, iree_byte_span_t call_results) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:1680)
+iree_vm_bytecode_call_import(iree_vm_stack_t * stack, const iree_vm_bytecode_module_state_t * module_state, uint32_t import_ordinal, const iree_vm_registers_t caller_registers, const iree_vm_register_list_t * restrict src_reg_list, const iree_vm_register_list_t * restrict dst_reg_list, iree_vm_stack_frame_t * restrict * out_caller_frame, iree_vm_registers_t * out_caller_registers) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:568)
+iree_vm_bytecode_issue_import_call(iree_vm_stack_t * stack, const iree_vm_function_call_t call, iree_string_view_t cconv_results, const iree_vm_register_list_t * restrict dst_reg_list, iree_vm_stack_frame_t * restrict * out_caller_frame, iree_vm_registers_t * out_caller_registers) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:452)
+iree_vm_native_module_begin_call(void * self, iree_vm_stack_t * stack, iree_vm_function_call_t call) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:402)
+iree_vm_native_module_issue_call(iree_vm_native_module_t * module, iree_vm_stack_t * stack, iree_vm_stack_frame_t * callee_frame, iree_vm_native_function_flags_t flags, iree_byte_span_t args_storage, iree_byte_span_t rets_storage) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:339)
+```
+
+Here is the call stack through the `hal.devices.get` function.
+
+```log
+iree_hal_module_devices_get(iree_vm_stack_t * restrict stack, void * restrict module, iree_hal_module_state_t * restrict state, iree_vm_abi_i_t * restrict args, iree_vm_abi_r_t * restrict rets) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/modules/hal/module.c:1178)
+iree_vm_shim_i_r(iree_vm_stack_t * restrict stack, iree_vm_native_function_flags_t flags, iree_byte_span_t args_storage, iree_byte_span_t rets_storage, iree_vm_native_function_target2_t target_fn, void * restrict module, void * restrict module_state) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/shims.c:10)
+iree_vm_native_module_issue_call(iree_vm_native_module_t * module, iree_vm_stack_t * stack, iree_vm_stack_frame_t * callee_frame, iree_vm_native_function_flags_t flags, iree_byte_span_t args_storage, iree_byte_span_t rets_storage) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:346)
+iree_vm_native_module_begin_call(void * self, iree_vm_stack_t * stack, iree_vm_function_call_t call) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:402)
+iree_vm_bytecode_issue_import_call(iree_vm_stack_t * stack, const iree_vm_function_call_t call, iree_string_view_t cconv_results, const iree_vm_register_list_t * restrict dst_reg_list, iree_vm_stack_frame_t * restrict * out_caller_frame, iree_vm_registers_t * out_caller_registers) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:452)
+iree_vm_bytecode_call_import(iree_vm_stack_t * stack, const iree_vm_bytecode_module_state_t * module_state, uint32_t import_ordinal, const iree_vm_registers_t caller_registers, const iree_vm_register_list_t * restrict src_reg_list, const iree_vm_register_list_t * restrict dst_reg_list, iree_vm_stack_frame_t * restrict * out_caller_frame, iree_vm_registers_t * out_caller_registers) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:568)
+iree_vm_bytecode_dispatch(iree_vm_stack_t * restrict stack, iree_vm_bytecode_module_t * restrict module, iree_vm_stack_frame_t * restrict current_frame, iree_vm_registers_t regs, iree_byte_span_t call_results) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:1680)
+iree_vm_bytecode_dispatch_begin(iree_vm_stack_t * stack, iree_vm_bytecode_module_t * module, const iree_vm_function_call_t call, iree_string_view_t cconv_arguments, iree_string_view_t cconv_results) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:636)
+iree_vm_bytecode_module_begin_call(void * self, iree_vm_stack_t * stack, iree_vm_function_call_t call) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/module.c:788)
+iree_vm_context_run_function(iree_vm_context_t * context, iree_vm_stack_t * stack, iree_vm_module_t * module, iree_string_view_t function_name) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:91)
+iree_vm_context_register_modules(iree_vm_context_t * context, iree_host_size_t module_count, iree_vm_module_t ** modules) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:525)
+iree_runtime_session_append_module(iree_runtime_session_t * session, iree_vm_module_t * module) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:197)
+iree_runtime_session_append_bytecode_module_from_memory(iree_runtime_session_t * session, iree_const_byte_span_t flatbuffer_data, iree_allocator_t flatbuffer_allocator) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:220)
+iree_runtime_session_append_bytecode_module_from_file(iree_runtime_session_t * session, const char * file_path) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:249)
+iree_runtime_demo_load_module(iree_runtime_session_t * session) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:34)
+iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:144)
+iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
+main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
+```
+
+After `call.function.module->begin_call` in the `iree_vm_native_module_issue_call`. The `stack` and storage will be update. and copy the result to the caller registers.
 
 
-## Debug call stack information
+<!-- ## Debug call stack information
 
 
 ```text
@@ -392,3 +847,24 @@ iree_vm_bytecode_issue_import_call(iree_vm_stack_t * stack, const iree_vm_functi
 iree_vm_native_module_begin_call(void * self, iree_vm_stack_t * stack, iree_vm_function_call_t call) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:402)
 iree_vm_native_module_issue_call(iree_vm_native_module_t * module, iree_vm_stack_t * stack, iree_vm_stack_frame_t * callee_frame, iree_vm_native_function_flags_t flags, iree_byte_span_t args_storage, iree_byte_span_t rets_storage) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:339)
 ```
+
+
+
+------------------------
+
+```log
+iree_vm_native_module_get_export_function(iree_vm_native_module_t * module, iree_host_size_t ordinal, iree_vm_function_t * out_function, iree_string_view_t * out_name, iree_vm_function_signature_t * out_signature) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:176)
+iree_vm_native_module_get_function(void * self, iree_vm_function_linkage_t linkage, iree_host_size_t ordinal, iree_vm_function_t * out_function, iree_string_view_t * out_name, iree_vm_function_signature_t * out_signature) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:208)
+iree_vm_native_module_lookup_function(void * self, iree_vm_function_linkage_t linkage, iree_string_view_t name, const iree_vm_function_signature_t * expected_signature, iree_vm_function_t * out_function) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:272)
+iree_vm_context_resolve_function_impl(const iree_vm_context_t * context, iree_string_view_t full_name, const iree_vm_function_signature_t * expected_signature, iree_vm_function_t * out_function) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:590)
+iree_vm_context_resolve_module_imports(iree_vm_context_t * context, iree_vm_module_t * module, iree_vm_module_state_t * module_state) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:190)
+iree_vm_context_register_modules(iree_vm_context_t * context, iree_host_size_t module_count, iree_vm_module_t ** modules) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:510)
+iree_runtime_session_append_module(iree_runtime_session_t * session, iree_vm_module_t * module) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:197)
+iree_runtime_session_append_bytecode_module_from_memory(iree_runtime_session_t * session, iree_const_byte_span_t flatbuffer_data, iree_allocator_t flatbuffer_allocator) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:220)
+iree_runtime_session_append_bytecode_module_from_file(iree_runtime_session_t * session, const char * file_path) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/session.c:249)
+iree_runtime_demo_load_module(iree_runtime_session_t * session) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:34)
+iree_runtime_demo_run_session(iree_runtime_instance_t * instance) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:144)
+iree_runtime_demo_main() (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:94)
+main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/runtime/demo/hello_world_explained.c:28)
+```
+ -->
