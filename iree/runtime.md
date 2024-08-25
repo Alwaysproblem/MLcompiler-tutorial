@@ -98,6 +98,128 @@ static const iree_hal_device_vtable_t iree_hal_task_device_vtable = {
 
 After this, it will also initialize the buffer, queue, memory block pool, and loaders.
 
+## create cuda device
+
+```log
+main (/root/Desktop/dockerVolumn/iree/tools/iree-run-module-main.c:43)
+iree_tooling_run_module_from_flags (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/run_module.c:387)
+iree_tooling_run_module_with_data (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/run_module.c:404)
+iree_tooling_create_run_context (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/run_module.c:151)
+iree_tooling_create_context_from_flags (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/context_util.c:610)
+iree_tooling_resolve_modules (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/context_util.c:485)
+iree_vm_module_enumerate_dependencies (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/module.c:278)
+iree_vm_bytecode_module_enumerate_dependencies (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/module.c:232)
+iree_tooling_resolve_module_dependency_callback (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/context_util.c:425)
+iree_tooling_load_hal_async_module (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/context_util.c:204)
+iree_hal_create_devices_from_flags (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/device_util.c:392)
+iree_hal_create_device (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/driver_registry.c:350)
+iree_hal_driver_create_device_by_uri (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/driver.c:159)
+iree_hal_driver_create_device_by_path (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/driver.c:120)
+iree_hal_cuda_driver_create_device_by_path (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/cuda/cuda_driver.c:596)
+iree_hal_cuda_driver_create_device_by_id (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/cuda/cuda_driver.c:472)
+iree_hal_cuda_device_create (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/cuda/cuda_device.c:403)
+iree_hal_cuda_device_create_internal (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/cuda/cuda_device.c:334)
+```
+
+Here the logic in `iree_hal_cuda_driver_create_device_by_id`:
+
+1. cuda init
+2. select default device
+3. create the iree cuda device struct
+
+
+Here the logic in `iree_hal_cuda_device_create`:
+
+1. check the cuda device is valid
+2. create the cuda context
+3. create the cuda stream
+4. call `iree_hal_cuda_device_create_internal` to create the device struct
+5. create iree host event pool allocator
+6. create the iree cuda event pool allocator
+7. create the iree cuda timepoint pool allocator
+
+
+Here the logic in `iree_hal_cuda_device_create_internal`:
+
+1. Initalize the resource with `iree_hal_resource_initialize` and register the `iree_hal_cuda_device_vtable` in `device->resource`
+
+```cpp
+static const iree_hal_device_vtable_t iree_hal_cuda_device_vtable = {
+    .destroy = iree_hal_cuda_device_destroy,
+    .id = iree_hal_cuda_device_id,
+    .host_allocator = iree_hal_cuda_device_host_allocator,
+    .device_allocator = iree_hal_cuda_device_allocator,
+    .replace_device_allocator = iree_hal_cuda_replace_device_allocator,
+    .replace_channel_provider = iree_hal_cuda_replace_channel_provider,
+    .trim = iree_hal_cuda_device_trim,
+    .query_i64 = iree_hal_cuda_device_query_i64,
+    .create_channel = iree_hal_cuda_device_create_channel,
+    .create_command_buffer = iree_hal_cuda_device_create_command_buffer,
+    .create_descriptor_set_layout =
+        iree_hal_cuda_device_create_descriptor_set_layout,
+    .create_event = iree_hal_cuda_device_create_event,
+    .create_executable_cache = iree_hal_cuda_device_create_executable_cache,
+    .import_file = iree_hal_cuda_device_import_file,
+    .create_pipeline_layout = iree_hal_cuda_device_create_pipeline_layout,
+    .create_semaphore = iree_hal_cuda_device_create_semaphore,
+    .query_semaphore_compatibility =
+        iree_hal_cuda_device_query_semaphore_compatibility,
+    .queue_alloca = iree_hal_cuda_device_queue_alloca,
+    .queue_dealloca = iree_hal_cuda_device_queue_dealloca,
+    .queue_read = iree_hal_cuda_device_queue_read,
+    .queue_write = iree_hal_cuda_device_queue_write,
+    .queue_execute = iree_hal_cuda_device_queue_execute,
+    .queue_flush = iree_hal_cuda_device_queue_flush,
+    .wait_semaphores = iree_hal_cuda_device_wait_semaphores,
+    .profiling_begin = iree_hal_cuda_device_profiling_begin,
+    .profiling_flush = iree_hal_cuda_device_profiling_flush,
+    .profiling_end = iree_hal_cuda_device_profiling_end,
+};
+```
+
+2. create the arena pool
+3. move the driver info, context, symbol etc to the device struct
+4. register the vtable `iree_hal_cuda_deferred_work_queue_device_interface_vtable` for device_interface
+
+```cpp
+static const iree_hal_deferred_work_queue_device_interface_vtable_t
+    iree_hal_cuda_deferred_work_queue_device_interface_vtable = {
+        .destroy = iree_hal_cuda_deferred_work_queue_device_interface_destroy,
+        .bind_to_thread =
+            iree_hal_cuda_deferred_work_queue_device_interface_bind_to_thread,
+        .wait_native_event =
+            iree_hal_cuda_deferred_work_queue_device_interface_wait_native_event,
+        .create_native_event =
+            iree_hal_cuda_deferred_work_queue_device_interface_create_native_event,
+        .record_native_event =
+            iree_hal_cuda_deferred_work_queue_device_interface_record_native_event,
+        .synchronize_native_event =
+            iree_hal_cuda_deferred_work_queue_device_interface_synchronize_native_event,
+        .destroy_native_event =
+            iree_hal_cuda_deferred_work_queue_device_interface_destroy_native_event,
+        .semaphore_acquire_timepoint_device_signal_native_event =
+            iree_hal_cuda_deferred_work_queue_device_interface_semaphore_acquire_timepoint_device_signal_native_event,
+        .acquire_host_wait_event =
+            iree_hal_cuda_deferred_work_queue_device_interface_acquire_host_wait_event,
+        .device_wait_on_host_event =
+            iree_hal_cuda_deferred_work_queue_device_interface_device_wait_on_host_event,
+        .release_wait_event =
+            iree_hal_cuda_deferred_work_queue_device_interface_release_wait_event,
+        .native_event_from_wait_event =
+            iree_hal_cuda_deferred_work_queue_device_interface_native_event_from_wait_event,
+        .create_stream_command_buffer =
+            iree_hal_cuda_deferred_work_queue_device_interface_create_stream_command_buffer,
+        .submit_command_buffer =
+            iree_hal_cuda_deferred_work_queue_device_interface_submit_command_buffer,
+};
+```
+5. create an queue with `iree_hal_deferred_work_queue_create`, in this function will create an queue and threads.
+    1. create a queue with work queue and complete queue
+    2. start the threads with `iree_hal_deferred_work_queue_worker_execute` and `iree_hal_deferred_work_queue_completion_execute`
+
+6. if tracing is enabled, create the tracing event
+7. create the memory pool allocator
+
 ## System Library Loader
 
 ```text
@@ -805,6 +927,96 @@ main(int argc, char ** argv) (/root/Desktop/dockerVolumn/iree/runtime/src/iree/r
 
 After `call.function.module->begin_call` in the `iree_vm_native_module_issue_call`. The `stack` and storage will be update. and copy the result to the caller registers.
 
+## HAL create cuda device executable
+
+```log
+main (/root/Desktop/dockerVolumn/iree/tools/iree-run-module-main.c:43)
+...
+iree_vm_context_create_with_modules (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:340)
+iree_vm_context_register_modules (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:525)
+iree_vm_context_run_function (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/context.c:91)
+iree_vm_bytecode_module_begin_call (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/module.c:788)
+iree_vm_bytecode_dispatch_begin (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:636)
+iree_vm_bytecode_dispatch (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:1716)
+iree_vm_bytecode_call_import_variadic (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:609)
+iree_vm_bytecode_issue_import_call (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/dispatch.c:452)
+iree_vm_native_module_begin_call (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:402)
+iree_vm_native_module_issue_call (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/native_module.c:346)
+iree_vm_shim_rrrrCrD_r (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/shims.c:50)
+iree_hal_module_executable_create (/root/Desktop/dockerVolumn/iree/runtime/src/iree/modules/hal/module.c:1490)
+```
+
+Here is the logic of the `iree_hal_module_executable_create` function:
+
+1. validate the ro data and extract the executable data format.
+2. lookup the executable cache with `iree_hal_module_state_lookup_executable_cache`
+3. do somethings with pipeline_layout works.
+4. prepare the executable data with `iree_hal_executable_cache_prepare_executable`
+   This will call _VTABlE_DISPATCH macro inside the `iree_hal_executable_cache_prepare_executable` function.
+
+    ```cpp
+    _VTABLE_DISPATCH(executable_cache, prepare_executable)(
+        executable_cache, executable_params, out_executable);
+    // This marco above will be expanded to:
+    ((const iree_hal_executable_cache_vtable_t*)((const iree_hal_resource_t*)(executable_cache))
+        ->vtable)
+        ->prepare_executable
+    ```
+
+    the `iree_hal_cuda_executable_cache_vtable` will be used because the resource is cuda driver.
+    and then, `iree_hal_cuda_native_executable_create` will be called inside the `iree_hal_cuda_nop_executable_cache_prepare_executable` function.
+    The call stack is like below:
+
+    ```log
+    ...
+    iree_hal_module_executable_create (/root/Desktop/dockerVolumn/iree/runtime/src/iree/modules/hal/module.c:1489)
+    iree_hal_executable_cache_prepare_executable (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/executable_cache.c:64)
+    iree_hal_cuda_nop_executable_cache_prepare_executable (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/cuda/nop_executable_cache.c:91)
+    iree_hal_cuda_native_executable_create (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/cuda/native_executable.c:123)
+    ```
+
+    In the function `iree_hal_cuda_native_executable_create` :
+    1. will valid the executable data format and extract the executable data.
+    2. load ptx data with `cuModuleLoadDataEx` nvidia symbol.
+
+    ```cpp
+    iree_status_t status = IREE_CURESULT_TO_STATUS(
+    symbols, cuModuleLoadDataEx(&module, ptx_image, 0, NULL, NULL),
+    "cuModuleLoadDataEx");
+    ```
+    3. get the kernel function with `cuModuleGetFunction` nvidia symbol during the `executable` setting up.
+    4. set the max shard memory and function attributes with `cuFuncSetAttribute` nvidia symbol during the `executable` setting up.
+
+
+## For Cuda device-like diver creation
+
+```log
+main (/root/Desktop/dockerVolumn/iree/tools/iree-run-module-main.c:43)
+iree_tooling_run_module_from_flags (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/run_module.c:387)
+iree_tooling_run_module_with_data (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/run_module.c:404)
+iree_tooling_create_run_context (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/run_module.c:151)
+iree_tooling_create_context_from_flags (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/context_util.c:610)
+iree_tooling_resolve_modules (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/context_util.c:485)
+iree_vm_module_enumerate_dependencies (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/module.c:278)
+iree_vm_bytecode_module_enumerate_dependencies (/root/Desktop/dockerVolumn/iree/runtime/src/iree/vm/bytecode/module.c:232)
+iree_tooling_resolve_module_dependency_callback (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/context_util.c:425)
+iree_tooling_load_hal_async_module (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/context_util.c:204)
+iree_hal_create_devices_from_flags (/root/Desktop/dockerVolumn/iree/runtime/src/iree/tooling/device_util.c:392)
+iree_hal_create_device (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/driver_registry.c:342)
+iree_hal_driver_registry_try_create (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/driver_registry.c:314)
+iree_hal_cuda_driver_factory_try_create (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/cuda/registration/driver_module.c:118)
+iree_hal_cuda_driver_create (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/cuda/cuda_driver.c:111)
+iree_hal_cuda_driver_create_internal (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/cuda/cuda_driver.c:79)
+iree_hal_cuda_dynamic_symbols_initialize (/root/Desktop/dockerVolumn/iree/runtime/src/iree/hal/drivers/cuda/cuda_dynamic_symbols.c:61)
+```
+
+Here the cuda symbol will be loaded with `iree_hal_cuda_dynamic_symbols_initialize`
+
+1. load cuda symbols with `iree_dynamic_library_load_from_files` (with dlopen `libcuda.so`)
+2. resolve the symbols with `iree_dynamic_library_lookup_symbol` (with dlsym)
+    1. find the `cuGetProcAddress` function. This function will be used to load the cuda driver functions.
+    2. lookup the cuda functions with `cuGetProcAddress` function.
+3. load nccl symbols with `iree_dynamic_library_load_from_files` (with dlopen `libnccl.so`)
 
 <!-- ## Debug call stack information
 
