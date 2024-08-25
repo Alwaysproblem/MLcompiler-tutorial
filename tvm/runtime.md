@@ -32,24 +32,19 @@ python: load_module
             -> `tkey == "_lib"` call `make_object<LibraryModuleNode>`
             -> `tkey == "_import_tree"` read `import_tree_row_ptr` and `import_tree_child_indices`
             -> `tkey == <others>` call `LoadModuleFromBinary@src/runtime/library_module.cc:107`
-              -> call `runtime.module.loadbinary_<tkey>` for rcar target, it is `runtime.module.loadbinary_rcar_v4x`
-                -> call `LoadFromBinary@src/runtime/contrib/rcar_v4x/rcar_v4x_runtime.cc:140`
+              -> call `runtime.module.loadbinary_<tkey>` for target
+                -> call `LoadFromBinary@src/runtime/contrib/target/target_runtime.cc:140`
             -> push back into the Module List
         -> return the root module which is the first module in the list.
 ```
 
 During the `CreateModuleFromLibrary` function, the `net_onnx_rdl.tar` will be untar and with `g++  -shared -fPIC  -o <output_name>.so devc.o lib0.o` to create the shared library.
 
-
 ```log
 python: tvm.graph_executor.create
 -> call the `GraphExecutorCreate@src/runtime/graph_executor/graph_executor.cc:788`
   -> call the `exec->Init`
     -> call the `this->Load(&reader)` # This is the `Load` function.
-      -> in this load function, it will parse the metadata.json like this (in the graph_json chapter):
-      -> Here it will extract the `arg_nodes`, `heads`, `nodes`, `node_row_ptr`, `attrs` and `shape` information.
-      -> and init the vector of Node in the `GraphExecutor` object.
-      -> and all the nodes in the json will be extracted to the `TVMOpParam`.
     -> call `GraphExecutor::SetupStorage()`
       -> calculate the tensor space and create a storage list and allocate the memory. 
     -> call `GraphExecutor::SetupOpExecs()`
@@ -58,7 +53,7 @@ python: tvm.graph_executor.create
         -> scan the input and output and create the TVMArgs
         -> `module_.GetFunction(param.func_name, true);`
           # Here the param.func_name is the function name in the json.
-          # So, This will call the `RCarV4XRuntime::GetFunction` since the name is for rcar target.
+          # So, This will call the `TargetRuntime::GetFunction` since the name is for target.
           # -> `ModuleNode::GetFunction@src/runtime/module.cc:64`
         -> return the function ptr and args ptr.
 
@@ -70,111 +65,3 @@ python:
 ```
 
 Note: call the GetFuntion(`default`) function, This will convert the tensor into device tensor.
-
-## graph_json
-
-```json
-{
-  "nodes": [
-    {
-      "op": "null", 
-      "name": "input", 
-      "inputs": []
-    }, 
-    {
-      "op": "tvm_op", 
-      "name": "tvmgen_foo_rcardkl_main_0", 
-      "attrs": {
-        "num_outputs": "1", 
-        "num_inputs": "1", 
-        "flatten_data": "0", 
-        "func_name": "tvmgen_foo_rcardkl_main_0"
-      }, 
-      "inputs": [
-        [
-          0, 
-          0, 
-          0
-        ]
-      ]
-    }, 
-    {
-      "op": "tvm_op", 
-      "name": "tvmgen_foo_tvmgen_foo_rcar_imp_main_0", 
-      "attrs": {
-        "flatten_data": "0", 
-        "func_name": "tvmgen_foo_tvmgen_foo_rcar_imp_main_0", 
-        "out_layout": "", 
-        "data_layout": "NCHW", 
-        "hash": "3fb7d5cff8f3e218", 
-        "kernel_layout": "OIHW", 
-        "num_outputs": "1", 
-        "num_inputs": "1", 
-        "global_symbol": "tvmgen_foo_tvmgen_foo_rcar_imp_main_0", 
-        "Compiler": "rcar_imp"
-      }, 
-      "inputs": [
-        [
-          1, 
-          0, 
-          0
-        ]
-      ]
-    }, 
-    {
-      "op": "tvm_op", 
-      "name": "tvmgen_foo_rcardkl_main_3", 
-      "attrs": {
-        "num_outputs": "1", 
-        "num_inputs": "1", 
-        "flatten_data": "0", 
-        "func_name": "tvmgen_foo_rcardkl_main_3"
-      }, 
-      "inputs": [
-        [
-          2, 
-          0, 
-          0
-        ]
-      ]
-    }
-  ], 
-  "arg_nodes": [0], 
-  "heads": [
-    [
-      3, 
-      0, 
-      0
-    ]
-  ], 
-  "attrs": {
-    "dltype": [
-      "list_str", 
-      [
-        "float32", 
-        "int8", 
-        "int8", 
-        "float32"
-      ]
-    ], 
-    "device_index": [
-      "list_int", 
-      [1, 1, 1, 1]
-    ], 
-    "storage_id": [
-      "list_int", 
-      [0, 1, 2, 3]
-    ], 
-    "shape": [
-      "list_shape", 
-      [
-        [1, 3, 224, 224], 
-        [1, 3, 224, 224], 
-        [1, 512, 1, 1], 
-        [1, 1000]
-      ]
-    ]
-  }, 
-  "node_row_ptr": [0, 1, 2, 3, 4]
-}
-```
