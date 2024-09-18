@@ -29,7 +29,7 @@ std::unique_ptr<mlir::Pass> createLowerToAffinePass();
 /// well as `Affine` and `Std`, to the LLVM dialect for codegen.
 std::unique_ptr<mlir::Pass> createLowerToLLVMPass();
 
-}  // namespace toy
-}  // namespace mlir
+} // namespace toy
+} // namespace mlir
 
-#endif  // TOY_PASSES_H
+#endif // TOY_PASSES_H

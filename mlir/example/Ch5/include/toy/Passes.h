@@ -25,7 +25,7 @@ std::unique_ptr<Pass> createShapeInferencePass();
 /// for a subset of the Toy IR (e.g. matmul).
 std::unique_ptr<mlir::Pass> createLowerToAffinePass();
 
-}  // namespace toy
-}  // namespace mlir
+} // namespace toy
+} // namespace mlir
 
-#endif  // TOY_PASSES_H
+#endif // TOY_PASSES_H

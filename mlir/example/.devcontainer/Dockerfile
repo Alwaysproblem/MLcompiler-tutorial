@@ -18,8 +18,7 @@ RUN echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy main" > /etc/apt/s
     libtinfo-dev zlib1g-dev \
     build-essential cmake ninja-build \
     clang-19 clang-tidy-19 clangd-19 \
-    clang-format-19 lldb-19 lld-19 \
-    libmlir-19-dev libfmt-dev libspdlog-dev \
+    clang-format-19 lldb-19 lld-19 libfmt-dev libspdlog-dev \
     && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-19 100 \
     && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-19 100 \
     && update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-19 100 \

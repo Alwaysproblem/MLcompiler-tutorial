@@ -13,18 +13,18 @@
 #ifndef TOY_LEXER_H
 #define TOY_LEXER_H
 
+#include "llvm/ADT/StringRef.h"
+
 #include <memory>
 #include <string>
-
-#include "llvm/ADT/StringRef.h"
 
 namespace toy {
 
 /// Structure definition a location in a file.
 struct Location {
-  std::shared_ptr<std::string> file;  ///< filename.
-  int line;                           ///< line number.
-  int col;                            ///< column number.
+  std::shared_ptr<std::string> file; ///< filename.
+  int line;                          ///< line number.
+  int col;                           ///< column number.
 };
 
 // List of Token returned by the lexer.
@@ -56,7 +56,7 @@ enum Token : int {
 /// can proceed by reading the next line from the standard input or from a
 /// memory mapped file.
 class Lexer {
- public:
+public:
   /// Create a lexer for the given filename. The filename is kept only for
   /// debugging purpose (attaching a location to a Token).
   Lexer(std::string filename)
@@ -98,7 +98,7 @@ class Lexer {
   // Return the current column in the file.
   int getCol() { return curCol; }
 
- private:
+private:
   /// Delegate to a derived class fetching the next line. Returns an empty
   /// string to signal end of file (EOF). Lines are expected to always finish
   /// with "\n"
@@ -109,11 +109,13 @@ class Lexer {
   /// needed.
   int getNextChar() {
     // The current line buffer should not be empty unless it is the end of file.
-    if (curLineBuffer.empty()) return EOF;
+    if (curLineBuffer.empty())
+      return EOF;
     ++curCol;
     auto nextchar = curLineBuffer.front();
     curLineBuffer = curLineBuffer.drop_front();
-    if (curLineBuffer.empty()) curLineBuffer = readNextLine();
+    if (curLineBuffer.empty())
+      curLineBuffer = readNextLine();
     if (nextchar == '\n') {
       ++curLineNum;
       curCol = 0;
@@ -124,7 +126,8 @@ class Lexer {
   ///  Return the next token from standard input.
   Token getTok() {
     // Skip any whitespace.
-    while (isspace(lastChar)) lastChar = Token(getNextChar());
+    while (isspace(lastChar))
+      lastChar = Token(getNextChar());
 
     // Save the current location before reading the token characters.
     lastLocation.line = curLineNum;
@@ -136,9 +139,12 @@ class Lexer {
       while (isalnum((lastChar = Token(getNextChar()))) || lastChar == '_')
         identifierStr += (char)lastChar;
 
-      if (identifierStr == "return") return tok_return;
-      if (identifierStr == "def") return tok_def;
-      if (identifierStr == "var") return tok_var;
+      if (identifierStr == "return")
+        return tok_return;
+      if (identifierStr == "def")
+        return tok_def;
+      if (identifierStr == "var")
+        return tok_var;
       return tok_identifier;
     }
 
@@ -160,11 +166,13 @@ class Lexer {
         lastChar = Token(getNextChar());
       } while (lastChar != EOF && lastChar != '\n' && lastChar != '\r');
 
-      if (lastChar != EOF) return getTok();
+      if (lastChar != EOF)
+        return getTok();
     }
 
     // Check for end of file.  Don't eat the EOF.
-    if (lastChar == EOF) return tok_eof;
+    if (lastChar == EOF)
+      return tok_eof;
 
     // Otherwise, just return the character as its ascii value.
     Token thisChar = Token(lastChar);
@@ -201,22 +209,24 @@ class Lexer {
 
 /// A lexer implementation operating on a buffer in memory.
 class LexerBuffer final : public Lexer {
- public:
+public:
   LexerBuffer(const char *begin, const char *end, std::string filename)
       : Lexer(std::move(filename)), current(begin), end(end) {}
 
- private:
+private:
   /// Provide one line at a time to the Lexer, return an empty string when
   /// reaching the end of the buffer.
   llvm::StringRef readNextLine() override {
     auto *begin = current;
-    while (current <= end && *current && *current != '\n') ++current;
-    if (current <= end && *current) ++current;
+    while (current <= end && *current && *current != '\n')
+      ++current;
+    if (current <= end && *current)
+      ++current;
     llvm::StringRef result{begin, static_cast<size_t>(current - begin)};
     return result;
   }
   const char *current, *end;
 };
-}  // namespace toy
+} // namespace toy
 
-#endif  // TOY_LEXER_H
+#endif // TOY_LEXER_H

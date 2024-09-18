@@ -12,9 +12,12 @@
 
 #include "toy/AST.h"
 
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/ADT/TypeSwitch.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
+#include <string>
 
 using namespace toy;
 
@@ -31,10 +34,10 @@ struct Indent {
 /// Helper class that implement the AST tree traversal and print the nodes along
 /// the way. The only data member is the current indentation level.
 class ASTDumper {
- public:
+public:
   void dump(ModuleAST *node);
 
- private:
+private:
   void dump(const VarType &type);
   void dump(VarDeclExprAST *varDecl);
   void dump(ExprAST *expr);
@@ -53,12 +56,13 @@ class ASTDumper {
 
   // Actually print spaces matching the current indentation level
   void indent() {
-    for (int i = 0; i < curIndent; i++) llvm::errs() << "  ";
+    for (int i = 0; i < curIndent; i++)
+      llvm::errs() << "  ";
   }
   int curIndent = 0;
 };
 
-}  // namespace
+} // namespace
 
 /// Return a formatted string for the location of any node
 template <typename T>
@@ -71,8 +75,8 @@ static std::string loc(T *node) {
 
 // Helper Macro to bump the indentation level and print the leading spaces for
 // the current indentations
-#define INDENT()            \
-  Indent level_(curIndent); \
+#define INDENT()                                                               \
+  Indent level_(curIndent);                                                    \
   indent();
 
 /// Dispatch to a generic expressions to the appropriate subclass using RTTI
@@ -95,14 +99,16 @@ void ASTDumper::dump(VarDeclExprAST *varDecl) {
   llvm::errs() << "VarDecl " << varDecl->getName();
   dump(varDecl->getType());
   llvm::errs() << " " << loc(varDecl) << "\n";
-  if (auto *initVal = varDecl->getInitVal()) dump(initVal);
+  if (auto *initVal = varDecl->getInitVal())
+    dump(initVal);
 }
 
 /// A "block", or a list of expression
 void ASTDumper::dump(ExprASTList *exprList) {
   INDENT();
   llvm::errs() << "Block {\n";
-  for (auto &expr : *exprList) dump(expr.get());
+  for (auto &expr : *exprList)
+    dump(expr.get());
   indent();
   llvm::errs() << "} // Block\n";
 }
@@ -149,7 +155,8 @@ void ASTDumper::dump(LiteralExprAST *node) {
 void ASTDumper::dump(StructLiteralExprAST *node) {
   INDENT();
   llvm::errs() << "Struct Literal: ";
-  for (auto &value : node->getValues()) dump(value.get());
+  for (auto &value : node->getValues())
+    dump(value.get());
   indent();
   llvm::errs() << " " << loc(node) << "\n";
 }
@@ -164,7 +171,8 @@ void ASTDumper::dump(VariableExprAST *node) {
 void ASTDumper::dump(ReturnExprAST *node) {
   INDENT();
   llvm::errs() << "Return\n";
-  if (node->getExpr().has_value()) return dump(*node->getExpr());
+  if (node->getExpr().has_value())
+    return dump(*node->getExpr());
   {
     INDENT();
     llvm::errs() << "(void)\n";
@@ -184,7 +192,8 @@ void ASTDumper::dump(BinaryExprAST *node) {
 void ASTDumper::dump(CallExprAST *node) {
   INDENT();
   llvm::errs() << "Call '" << node->getCallee() << "' [ " << loc(node) << "\n";
-  for (auto &arg : node->getArgs()) dump(arg.get());
+  for (auto &arg : node->getArgs())
+    dump(arg.get());
   indent();
   llvm::errs() << "]\n";
 }
@@ -236,7 +245,8 @@ void ASTDumper::dump(StructAST *node) {
   {
     INDENT();
     llvm::errs() << "Variables: [\n";
-    for (auto &variable : node->getVariables()) dump(variable.get());
+    for (auto &variable : node->getVariables())
+      dump(variable.get());
     indent();
     llvm::errs() << "]\n";
   }
@@ -261,4 +271,4 @@ namespace toy {
 // Public API
 void dump(ModuleAST &module) { ASTDumper().dump(&module); }
 
-}  // namespace toy
+} // namespace toy

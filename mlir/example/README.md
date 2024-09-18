@@ -4,6 +4,8 @@
 
 ## Environment Setup
 
+### Environment Preparation with conda
+
 - OS must be higher than ubuntu 22.04.
 - install gcc-11 and g++-11
 
@@ -27,10 +29,23 @@ conda install cmake ninja clang-format clang clang-tools mlir zlib spdlog fmt li
 # create -n mlir cmake ninja clang-format clang mlir zlib spdlog fmt lit llvm -c conda-forge -y
 ```
 
-## build example
+### build example
 
 ```bash
 cd example
+bash build_with_conda.sh all
+```
+
+### Environment Preparation with dev containers
+
+Please choose the `Dev Containers: Open Folder in Container...`
+
+### build example
+
+```bash
+cd example
+bash scripts/sync_deps.sh
+bash scripts/build_deps.sh
 bash build.sh all
 ```
 
@@ -902,20 +917,7 @@ $ ./build/Ch6/mlir-example-ch6 Ch6/example.toy -emit=llvm --mlir-print-ir-after-
 
 ```bash
 $ ./build/Ch7/mlir-example-ch7 Ch7/struct-codegen.toy -emit=jit
-# module {
-#   toy.func private @multiply_transpose(%arg0: !toy.struct<tensor<*xf64>, tensor<*xf64>>) -> tensor<*xf64> {
-#     %0 = toy.struct_access %arg0[0] : !toy.struct<tensor<*xf64>, tensor<*xf64>> -> tensor<*xf64>
-#     %1 = toy.transpose(%0 : tensor<*xf64>) to tensor<*xf64>
-#     %2 = toy.struct_access %arg0[1] : !toy.struct<tensor<*xf64>, tensor<*xf64>> -> tensor<*xf64>
-#     %3 = toy.transpose(%2 : tensor<*xf64>) to tensor<*xf64>
-#     %4 = toy.mul %1, %3 : tensor<*xf64>
-#     toy.return %4 : tensor<*xf64>
-#   }
-#   toy.func @main() {
-#     %0 = toy.struct_constant [dense<[[1.000000e+00, 2.000000e+00, 3.000000e+00], [4.000000e+00, 5.000000e+00, 6.000000e+00]]> : tensor<2x3xf64>, dense<[[1.000000e+00, 2.000000e+00, 3.000000e+00], [4.000000e+00, 5.000000e+00, 6.000000e+00]]> : tensor<2x3xf64>] : !toy.struct<tensor<*xf64>, tensor<*xf64>>
-#     %1 = toy.generic_call @multiply_transpose(%0) : (!toy.struct<tensor<*xf64>, tensor<*xf64>>) -> tensor<*xf64>
-#     toy.print %1 : tensor<*xf64>
-#     toy.return
-#   }
-# }
+# 1.000000 16.000000
+# 4.000000 25.000000
+# 9.000000 36.000000
 ```

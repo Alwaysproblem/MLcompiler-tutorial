@@ -21,7 +21,7 @@ class MLIRContext;
 template <typename OpTy>
 class OwningOpRef;
 class ModuleOp;
-}  // namespace mlir
+} // namespace mlir
 
 namespace toy {
 class ModuleAST;
@@ -30,6 +30,6 @@ class ModuleAST;
 /// or nullptr on failure.
 mlir::OwningOpRef<mlir::ModuleOp> mlirGen(mlir::MLIRContext &context,
                                           ModuleAST &moduleAST);
-}  // namespace toy
+} // namespace toy
 
-#endif  // TOY_MLIRGEN_H
+#endif // TOY_MLIRGEN_H

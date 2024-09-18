@@ -124,10 +124,3 @@ index 6ec105a..d750782 100644
  //===----------------------------------------------------------------------===//
  // TableGen'd op method definitions
  //===----------------------------------------------------------------------===//
-diff --git a/torch/pytorch b/torch/pytorch
-index 256fed0..138e289 160000
---- a/torch/pytorch
-+++ b/torch/pytorch
-@@ -1 +1 @@
--Subproject commit 256fed02e930210dbcd7e5e23fcf142362098c2a
-+Subproject commit 138e2895d08a6517c5718b2a0118c1b23ff4664c-dirty

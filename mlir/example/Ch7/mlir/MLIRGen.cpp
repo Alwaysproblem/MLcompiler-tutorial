@@ -12,21 +12,36 @@
 //===----------------------------------------------------------------------===//
 
 #include "toy/MLIRGen.h"
+#include "mlir/IR/Block.h"
+#include "mlir/IR/Diagnostics.h"
+#include "mlir/IR/Value.h"
+#include "toy/AST.h"
+#include "toy/Dialect.h"
 
-#include <numeric>
-#include <optional>
-
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/ScopedHashTable.h"
-#include "llvm/Support/raw_ostream.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/Verifier.h"
-#include "toy/AST.h"
-#include "toy/Dialect.h"
+#include "toy/Lexer.h"
+
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/ScopedHashTable.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Twine.h"
+#include "llvm/Support/ErrorHandling.h"
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <numeric>
+#include <optional>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 using namespace mlir::toy;
 using namespace toy;
@@ -48,7 +63,7 @@ namespace {
 /// the semantics of the language and (hopefully) allow to perform accurate
 /// analysis and transformation based on these high level semantics.
 class MLIRGenImpl {
- public:
+public:
   MLIRGenImpl(mlir::MLIRContext &context) : builder(&context) {}
 
   /// Public API: convert the AST for a Toy module (source file) to an MLIR
@@ -61,10 +76,12 @@ class MLIRGenImpl {
     for (auto &record : moduleAST) {
       if (FunctionAST *funcAST = llvm::dyn_cast<FunctionAST>(record.get())) {
         mlir::toy::FuncOp func = mlirGen(*funcAST);
-        if (!func) return nullptr;
+        if (!func)
+          return nullptr;
         functionMap.insert({func.getName(), func});
       } else if (StructAST *str = llvm::dyn_cast<StructAST>(record.get())) {
-        if (failed(mlirGen(*str))) return nullptr;
+        if (failed(mlirGen(*str)))
+          return nullptr;
       } else {
         llvm_unreachable("unknown record type");
       }
@@ -81,7 +98,7 @@ class MLIRGenImpl {
     return theModule;
   }
 
- private:
+private:
   /// A "module" matches a Toy source file: containing a list of functions.
   mlir::ModuleOp theModule;
 
@@ -115,14 +132,15 @@ class MLIRGenImpl {
 
   /// Declare a variable in the current scope, return success if the variable
   /// wasn't declared yet.
-  mlir::LogicalResult declare(VarDeclExprAST &var, mlir::Value value) {
-    if (symbolTable.count(var.getName())) return mlir::failure();
+  llvm::LogicalResult declare(VarDeclExprAST &var, mlir::Value value) {
+    if (symbolTable.count(var.getName()))
+      return mlir::failure();
     symbolTable.insert(var.getName(), {value, &var});
     return mlir::success();
   }
 
   /// Create an MLIR type for the given struct.
-  mlir::LogicalResult mlirGen(StructAST &str) {
+  llvm::LogicalResult mlirGen(StructAST &str) {
     if (structMap.count(str.getName()))
       return emitError(loc(str.loc())) << "error: struct type with name `"
                                        << str.getName() << "' already exists";
@@ -141,7 +159,8 @@ class MLIRGenImpl {
                   "initializers";
 
       mlir::Type type = getType(variable->getType(), variable->loc());
-      if (!type) return mlir::failure();
+      if (!type)
+        return mlir::failure();
       elementTypes.push_back(type);
     }
 
@@ -159,7 +178,8 @@ class MLIRGenImpl {
     argTypes.reserve(proto.getArgs().size());
     for (auto &arg : proto.getArgs()) {
       mlir::Type type = getType(arg->getType(), arg->loc());
-      if (!type) return nullptr;
+      if (!type)
+        return nullptr;
       argTypes.push_back(type);
     }
     auto funcType = builder.getFunctionType(argTypes, std::nullopt);
@@ -175,7 +195,8 @@ class MLIRGenImpl {
     // Create an MLIR function for the given prototype.
     builder.setInsertionPointToEnd(theModule.getBody());
     mlir::toy::FuncOp function = mlirGen(*funcAST.getProto());
-    if (!function) return nullptr;
+    if (!function)
+      return nullptr;
 
     // Let's start the body of the function now!
     mlir::Block &entryBlock = function.front();
@@ -203,7 +224,8 @@ class MLIRGenImpl {
     // FIXME: we may fix the parser instead to always return the last expression
     // (this would possibly help the REPL case later)
     ReturnOp returnOp;
-    if (!entryBlock.empty()) returnOp = dyn_cast<ReturnOp>(entryBlock.back());
+    if (!entryBlock.empty())
+      returnOp = dyn_cast<ReturnOp>(entryBlock.back());
     if (!returnOp) {
       builder.create<ReturnOp>(loc(funcAST.getProto()->loc()));
     } else if (returnOp.hasOperand()) {
@@ -215,7 +237,8 @@ class MLIRGenImpl {
     }
 
     // If this function isn't main, then set the visibility to private.
-    if (funcAST.getProto()->getName() != "main") function.setPrivate();
+    if (funcAST.getProto()->getName() != "main")
+      function.setPrivate();
 
     return function;
   }
@@ -226,15 +249,19 @@ class MLIRGenImpl {
     llvm::StringRef structName;
     if (auto *decl = llvm::dyn_cast<VariableExprAST>(expr)) {
       auto varIt = symbolTable.lookup(decl->getName());
-      if (!varIt.first) return nullptr;
+      if (!varIt.first)
+        return nullptr;
       structName = varIt.second->getType().name;
     } else if (auto *access = llvm::dyn_cast<BinaryExprAST>(expr)) {
-      if (access->getOp() != '.') return nullptr;
+      if (access->getOp() != '.')
+        return nullptr;
       // The name being accessed should be in the RHS.
       auto *name = llvm::dyn_cast<VariableExprAST>(access->getRHS());
-      if (!name) return nullptr;
+      if (!name)
+        return nullptr;
       StructAST *parentStruct = getStructFor(access->getLHS());
-      if (!parentStruct) return nullptr;
+      if (!parentStruct)
+        return nullptr;
 
       // Get the element within the struct corresponding to the name.
       VarDeclExprAST *decl = nullptr;
@@ -244,14 +271,17 @@ class MLIRGenImpl {
           break;
         }
       }
-      if (!decl) return nullptr;
+      if (!decl)
+        return nullptr;
       structName = decl->getType().name;
     }
-    if (structName.empty()) return nullptr;
+    if (structName.empty())
+      return nullptr;
 
     // If the struct name was valid, check for an entry in the struct map.
     auto structIt = structMap.find(structName);
-    if (structIt == structMap.end()) return nullptr;
+    if (structIt == structMap.end())
+      return nullptr;
     return structIt->second.second;
   }
 
@@ -261,17 +291,20 @@ class MLIRGenImpl {
 
     // Lookup the struct node for the LHS.
     StructAST *structAST = getStructFor(accessOp.getLHS());
-    if (!structAST) return std::nullopt;
+    if (!structAST)
+      return std::nullopt;
 
     // Get the name from the RHS.
     VariableExprAST *name = llvm::dyn_cast<VariableExprAST>(accessOp.getRHS());
-    if (!name) return std::nullopt;
+    if (!name)
+      return std::nullopt;
 
     auto structVars = structAST->getVariables();
     const auto *it = llvm::find_if(structVars, [&](auto &var) {
       return var->getName() == name->getName();
     });
-    if (it == structVars.end()) return std::nullopt;
+    if (it == structVars.end())
+      return std::nullopt;
     return it - structVars.begin();
   }
 
@@ -289,7 +322,8 @@ class MLIRGenImpl {
     //    and propagate.
     //
     mlir::Value lhs = mlirGen(*binop.getLHS());
-    if (!lhs) return nullptr;
+    if (!lhs)
+      return nullptr;
     auto location = loc(binop.loc());
 
     // If this is an access operation, handle it immediately.
@@ -304,15 +338,16 @@ class MLIRGenImpl {
 
     // Otherwise, this is a normal binary op.
     mlir::Value rhs = mlirGen(*binop.getRHS());
-    if (!rhs) return nullptr;
+    if (!rhs)
+      return nullptr;
 
     // Derive the operation name from the binary operator. At the moment we only
     // support '+' and '*'.
     switch (binop.getOp()) {
-      case '+':
-        return builder.create<AddOp>(location, lhs, rhs);
-      case '*':
-        return builder.create<MulOp>(location, lhs, rhs);
+    case '+':
+      return builder.create<AddOp>(location, lhs, rhs);
+    case '*':
+      return builder.create<MulOp>(location, lhs, rhs);
     }
 
     emitError(location, "invalid binary operator '") << binop.getOp() << "'";
@@ -332,13 +367,14 @@ class MLIRGenImpl {
   }
 
   /// Emit a return operation. This will return failure if any generation fails.
-  mlir::LogicalResult mlirGen(ReturnExprAST &ret) {
+  llvm::LogicalResult mlirGen(ReturnExprAST &ret) {
     auto location = loc(ret.loc());
 
     // 'return' takes an optional expression, handle that case here.
     mlir::Value expr = nullptr;
     if (ret.getExpr().has_value()) {
-      if (!(expr = mlirGen(**ret.getExpr()))) return mlir::failure();
+      if (!(expr = mlirGen(**ret.getExpr())))
+        return mlir::failure();
     }
 
     // Otherwise, this return operation has zero operands.
@@ -397,8 +433,8 @@ class MLIRGenImpl {
   /// other literals in an Attribute attached to a `toy.struct_constant`
   /// operation. This function returns the generated constant, along with the
   /// corresponding struct type.
-  std::pair<mlir::ArrayAttr, mlir::Type> getConstantAttr(
-      StructLiteralExprAST &lit) {
+  std::pair<mlir::ArrayAttr, mlir::Type>
+  getConstantAttr(StructLiteralExprAST &lit) {
     std::vector<mlir::Attribute> attrElements;
     std::vector<mlir::Type> typeElements;
 
@@ -454,7 +490,8 @@ class MLIRGenImpl {
   /// Attributes are the way MLIR attaches constant to operations.
   void collectData(ExprAST &expr, std::vector<double> &data) {
     if (auto *lit = dyn_cast<LiteralExprAST>(&expr)) {
-      for (auto &value : lit->getValues()) collectData(*value, data);
+      for (auto &value : lit->getValues())
+        collectData(*value, data);
       return;
     }
 
@@ -472,7 +509,8 @@ class MLIRGenImpl {
     SmallVector<mlir::Value, 4> operands;
     for (auto &expr : call.getArgs()) {
       auto arg = mlirGen(*expr);
-      if (!arg) return nullptr;
+      if (!arg)
+        return nullptr;
       operands.push_back(arg);
     }
 
@@ -480,9 +518,8 @@ class MLIRGenImpl {
     // straightforward emission.
     if (callee == "transpose") {
       if (call.getArgs().size() != 1) {
-        emitError(location,
-                  "MLIR codegen encountered an error: toy.transpose "
-                  "does not accept multiple arguments");
+        emitError(location, "MLIR codegen encountered an error: toy.transpose "
+                            "does not accept multiple arguments");
         return nullptr;
       }
       return builder.create<TransposeOp>(location, operands[0]);
@@ -504,9 +541,10 @@ class MLIRGenImpl {
 
   /// Emit a print expression. It emits specific operations for two builtins:
   /// transpose(x) and print(x).
-  mlir::LogicalResult mlirGen(PrintExprAST &call) {
+  llvm::LogicalResult mlirGen(PrintExprAST &call) {
     auto arg = mlirGen(*call.getArg());
-    if (!arg) return mlir::failure();
+    if (!arg)
+      return mlir::failure();
 
     builder.create<PrintOp>(loc(call.loc()), arg);
     return mlir::success();
@@ -520,23 +558,23 @@ class MLIRGenImpl {
   /// Dispatch codegen for the right expression subclass using RTTI.
   mlir::Value mlirGen(ExprAST &expr) {
     switch (expr.getKind()) {
-      case toy::ExprAST::Expr_BinOp:
-        return mlirGen(cast<BinaryExprAST>(expr));
-      case toy::ExprAST::Expr_Var:
-        return mlirGen(cast<VariableExprAST>(expr));
-      case toy::ExprAST::Expr_Literal:
-        return mlirGen(cast<LiteralExprAST>(expr));
-      case toy::ExprAST::Expr_StructLiteral:
-        return mlirGen(cast<StructLiteralExprAST>(expr));
-      case toy::ExprAST::Expr_Call:
-        return mlirGen(cast<CallExprAST>(expr));
-      case toy::ExprAST::Expr_Num:
-        return mlirGen(cast<NumberExprAST>(expr));
-      default:
-        emitError(loc(expr.loc()))
-            << "MLIR codegen encountered an unhandled expr kind '"
-            << Twine(expr.getKind()) << "'";
-        return nullptr;
+    case toy::ExprAST::Expr_BinOp:
+      return mlirGen(cast<BinaryExprAST>(expr));
+    case toy::ExprAST::Expr_Var:
+      return mlirGen(cast<VariableExprAST>(expr));
+    case toy::ExprAST::Expr_Literal:
+      return mlirGen(cast<LiteralExprAST>(expr));
+    case toy::ExprAST::Expr_StructLiteral:
+      return mlirGen(cast<StructLiteralExprAST>(expr));
+    case toy::ExprAST::Expr_Call:
+      return mlirGen(cast<CallExprAST>(expr));
+    case toy::ExprAST::Expr_Num:
+      return mlirGen(cast<NumberExprAST>(expr));
+    default:
+      emitError(loc(expr.loc()))
+          << "MLIR codegen encountered an unhandled expr kind '"
+          << Twine(expr.getKind()) << "'";
+      return nullptr;
     }
   }
 
@@ -553,7 +591,8 @@ class MLIRGenImpl {
     }
 
     mlir::Value value = mlirGen(*init);
-    if (!value) return nullptr;
+    if (!value)
+      return nullptr;
 
     // Handle the case where we are initializing a struct value.
     VarType varType = vardecl.getType();
@@ -561,7 +600,8 @@ class MLIRGenImpl {
       // Check that the initializer type is the same as the variable
       // declaration.
       mlir::Type type = getType(varType, vardecl.loc());
-      if (!type) return nullptr;
+      if (!type)
+        return nullptr;
       if (type != value.getType()) {
         emitError(loc(vardecl.loc()))
             << "struct type of initializer is different than the variable "
@@ -579,29 +619,34 @@ class MLIRGenImpl {
     }
 
     // Register the value in the symbol table.
-    if (failed(declare(vardecl, value))) return nullptr;
+    if (failed(declare(vardecl, value)))
+      return nullptr;
     return value;
   }
 
   /// Codegen a list of expression, return failure if one of them hit an error.
-  mlir::LogicalResult mlirGen(ExprASTList &blockAST) {
+  llvm::LogicalResult mlirGen(ExprASTList &blockAST) {
     SymbolTableScopeT varScope(symbolTable);
     for (auto &expr : blockAST) {
       // Specific handling for variable declarations, return statement, and
       // print. These can only appear in block list and not in nested
       // expressions.
       if (auto *vardecl = dyn_cast<VarDeclExprAST>(expr.get())) {
-        if (!mlirGen(*vardecl)) return mlir::failure();
+        if (!mlirGen(*vardecl))
+          return mlir::failure();
         continue;
       }
-      if (auto *ret = dyn_cast<ReturnExprAST>(expr.get())) return mlirGen(*ret);
+      if (auto *ret = dyn_cast<ReturnExprAST>(expr.get()))
+        return mlirGen(*ret);
       if (auto *print = dyn_cast<PrintExprAST>(expr.get())) {
-        if (mlir::failed(mlirGen(*print))) return mlir::success();
+        if (mlir::failed(mlirGen(*print)))
+          return mlir::success();
         continue;
       }
 
       // Generic expression dispatch codegen.
-      if (!mlirGen(*expr)) return mlir::failure();
+      if (!mlirGen(*expr))
+        return mlir::failure();
     }
     return mlir::success();
   }
@@ -633,7 +678,7 @@ class MLIRGenImpl {
   }
 };
 
-}  // namespace
+} // namespace
 
 namespace toy {
 
@@ -643,4 +688,4 @@ mlir::OwningOpRef<mlir::ModuleOp> mlirGen(mlir::MLIRContext &context,
   return MLIRGenImpl(context).mlirGen(moduleAST);
 }
 
-}  // namespace toy
+} // namespace toy
