@@ -44,5 +44,30 @@
     "yyx-mlir-example",
     // "-v",
     // "/data/rech/yongxiy/Desktop/dockerVolumn:/root/Desktop/dockerVolumn"
-  ]
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "jeff-hykin.better-cpp-syntax",
+        "aaron-bond.better-comments",
+        "ms-vscode.cpptools-themes",
+        "revng.llvm-ir",
+        "jakob-erzar.llvm-tablegen",
+        "MomenAbdelkarim-WyattCalandro-LuisPrieto.mlir",
+        "ms-vscode.cpptools",
+        "ms-vscode.cpptools-extension-pack",
+        "twxs.cmake",
+        "josetr.cmake-language-support-vscode",
+        "ms-vscode.cmake-tools",
+        "cheshirekow.cmake-format",
+        "yzhang.markdown-all-in-one",
+        "bierner.markdown-preview-github-styles",
+        "bierner.markdown-mermaid",
+        "DavidAnson.vscode-markdownlint",
+        "llvm-vs-code-extensions.vscode-mlir",
+        "llvm-vs-code-extensions.vscode-clangd",
+        "llvm-vs-code-extensions.lldb-dap"
+      ]
+    }
+  }
 }

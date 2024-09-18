@@ -39,12 +39,10 @@ target_link_libraries(
           MLIRExecutionEngine
           MLIRIR
           MLIRLLVMCommonConversion
-          MLIRLLVMDialect
           MLIRLLVMToLLVMIRTranslation
           MLIRMemRefDialect
           MLIRParser
           MLIRPass
           MLIRSideEffectInterfaces
-          MLIRSupport
           MLIRTargetLLVMIRExport
           MLIRTransforms)

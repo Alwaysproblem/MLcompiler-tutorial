@@ -14,10 +14,10 @@ RUN echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy main" > /etc/apt/s
     && wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc \
     && apt update -y && \
     apt install -y \
-    python3 python3-dev python3-setuptools \
+    python3 python3-dev python3-setuptools python3-pip \
     libtinfo-dev zlib1g-dev \
     build-essential cmake ninja-build \
-    clang-19 clang-tidy-19 clangd-19 \
+    clang-19 clang-tidy-19 clangd-19 cmake-format \
     clang-format-19 lldb-19 lld-19 libfmt-dev libspdlog-dev \
     && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-19 100 \
     && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-19 100 \
@@ -28,4 +28,5 @@ RUN echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy main" > /etc/apt/s
     && update-alternatives --install /usr/bin/lldb lldb /usr/bin/lldb-19 100
 
 RUN git config --global --add safe.directory '*' && \
-    /root/.local/bin/setup_new_user ${UID} ${GID}
+    /root/.local/bin/setup_new_user ${UID} ${GID} && \
+    python3 -m pip install pre-commit
