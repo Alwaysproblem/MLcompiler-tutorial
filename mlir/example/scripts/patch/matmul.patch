@@ -74,17 +74,24 @@ index 6ec105a..d750782 100644
 +  state.addOperands({lhs, rhs});
 +}
 +
-+// mlir::ParseResult MatMulOp::parse(mlir::OpAsmParser &parser,
-+//                                mlir::OperationState &result) {
-+//   return parseBinaryOp(parser, result);
-+// }
++/// Infer the output shape of the MatMulOp, this is required by the shape
++/// inference interface.
++void MatMulOp::inferShapes() {
++  RankedTensorType lhsType =
++      llvm::dyn_cast<RankedTensorType>(getLhs().getType());
++  RankedTensorType rhsType =
++      llvm::dyn_cast<RankedTensorType>(getRhs().getType());
++  auto lhsShape = lhsType.getShape();
++  auto rhsShape = rhsType.getShape();
++  RankedTensorType res_type = RankedTensorType::get({lhsShape[0], rhsShape[1]},
++                                                    lhsType.getElementType());
++  getResult().setType(res_type);
++}
 +
-+// void MatMulOp::print(mlir::OpAsmPrinter &p) { printBinaryOp(p, *this); }
-+
-+mlir::LogicalResult MatMulOp::verify() {
-+  auto lhsType = getLhs().getType().dyn_cast<RankedTensorType>();
-+  auto rhsType = getRhs().getType().dyn_cast<RankedTensorType>();
-+  auto resultType = getType().dyn_cast<RankedTensorType>();
++llvm::LogicalResult MatMulOp::verify() {
++  auto lhsType = llvm::dyn_cast<RankedTensorType>(getLhs().getType());
++  auto rhsType = llvm::dyn_cast<RankedTensorType>(getRhs().getType());
++  auto resultType = llvm::dyn_cast<RankedTensorType>(getType());
 +
 +  if (!lhsType || !rhsType || !resultType)
 +    return mlir::success();
@@ -108,19 +115,6 @@ index 6ec105a..d750782 100644
 +
 +  return mlir::success();
 +}
-+
-+/// Infer the output shape of the MatMulOp, this is required by the shape
-+/// inference interface.
-+void MatMulOp::inferShapes() {
-+  RankedTensorType lhsType = getLhs().getType().cast<RankedTensorType>();
-+  RankedTensorType rhsType = getRhs().getType().cast<RankedTensorType>();
-+  auto lhsShape = lhsType.getShape();
-+  auto rhsShape = rhsType.getShape();
-+  RankedTensorType res_type = RankedTensorType::get({lhsShape[0], rhsShape[1]},
-+                                                    lhsType.getElementType());
-+  getResult().setType(res_type);
-+}
-+
  //===----------------------------------------------------------------------===//
  // TableGen'd op method definitions
  //===----------------------------------------------------------------------===//
