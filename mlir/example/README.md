@@ -11,12 +11,13 @@
 
 ```bash
 apt update -y && \
-apt install -yq gcc-11 g++-11
+apt install -yq gcc-13 g++-13
 # apt install -yq software-properties-common \
 # add-apt-repository -y ppa:ubuntu-toolchain-r/test \
+# apt update -y
 # apt install -yq gcc-11 g++-11
-update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 20
-update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 20
+update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 20
+update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 20
 ```
 
 - install cmake and ninja you can choose one way you like. conda is best for me.
@@ -25,11 +26,11 @@ update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 20
 conda create -n mlir -y
 conda activate mlir
 # conda install cmake ninja clang-format clang lld ncurses mlir llvm -c conda-forge
-conda install cmake ninja clang-format clang clang-tools mlir zlib spdlog fmt lit llvm=17.* -c conda-forge -y
+conda install cmake ninja clang-format clang clang-tools mlir zlib spdlog fmt lit llvm=19.* -c conda-forge -y
 # create -n mlir cmake ninja clang-format clang mlir zlib spdlog fmt lit llvm -c conda-forge -y
 ```
 
-### build example
+### build example with conda
 
 ```bash
 cd example
@@ -40,13 +41,21 @@ bash build_with_conda.sh all
 
 Please choose the `Dev Containers: Open Folder in Container...`
 
-### build example
+### build example with dev containers
 
 ```bash
 cd example
 bash scripts/sync_deps.sh
 bash scripts/build_deps.sh
 bash build.sh all
+```
+
+## Configure the Clangd
+
+```bash
+cd example
+# after you configure the project with cmake, you can configure the clangd by run the following command
+compdb -p build list > compile_commands.json
 ```
 
 ## Run These code and understand mlir
@@ -920,4 +929,27 @@ $ ./build/Ch7/mlir-example-ch7 Ch7/struct-codegen.toy -emit=jit
 # 1.000000 16.000000
 # 4.000000 25.000000
 # 9.000000 36.000000
+```
+
+- Ch8
+
+```bash
+$ ./vscode_build/Ch8/mlir-example-ch8 Ch8/matmul.toy.mlir -emit=mlir
+# module {
+#   toy.func private @matmul_transpose(%arg0: tensor<*xf64>, %arg1: tensor<*xf64>) -> tensor<*xf64> {
+#     %0 = toy.transpose(%arg0 : tensor<*xf64>) to tensor<*xf64>
+#     %1 = toy.transpose(%arg1 : tensor<*xf64>) to tensor<*xf64>
+#     %2 = toy.matmul(%0 : tensor<*xf64>, %1 : tensor<*xf64>) to tensor<*xf64>
+#     toy.return %2 : tensor<*xf64>
+#   }
+#   toy.func @main() {
+#     %0 = toy.constant dense<[[1.000000e+00, 2.000000e+00, 3.000000e+00], [4.000000e+00, 5.000000e+00, 6.000000e+00]]> : tensor<2x3xf64>
+#     %1 = toy.reshape(%0 : tensor<2x3xf64>) to tensor<2x3xf64>
+#     %2 = toy.constant dense<[1.000000e+00, 2.000000e+00, 3.000000e+00, 4.000000e+00, 5.000000e+00, 6.000000e+00]> : tensor<6xf64>
+#     %3 = toy.reshape(%2 : tensor<6xf64>) to tensor<3x2xf64>
+#     %4 = toy.generic_call @matmul_transpose(%1, %3) : (tensor<2x3xf64>, tensor<3x2xf64>) -> tensor<*xf64>
+#     toy.print %4 : tensor<*xf64>
+#     toy.return
+#   }
+# }
 ```
