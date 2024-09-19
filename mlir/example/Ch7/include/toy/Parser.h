@@ -14,16 +14,17 @@
 #ifndef TOY_PARSER_H
 #define TOY_PARSER_H
 
-#include <map>
-#include <optional>
-#include <utility>
-#include <vector>
+#include "toy/AST.h"
+#include "toy/Lexer.h"
 
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
-#include "toy/AST.h"
-#include "toy/Lexer.h"
+
+#include <map>
+#include <utility>
+#include <vector>
+#include <optional>
 
 namespace toy {
 
@@ -33,32 +34,33 @@ namespace toy {
 /// string and the code could reference an undeclared variable and the parsing
 /// succeeds.
 class Parser {
- public:
+public:
   /// Create a Parser for the supplied lexer.
   Parser(Lexer &lexer) : lexer(lexer) {}
 
   /// Parse a full Module. A module is a list of function definitions.
   std::unique_ptr<ModuleAST> parseModule() {
-    lexer.getNextToken();  // prime the lexer
+    lexer.getNextToken(); // prime the lexer
 
     // Parse functions and structs one at a time and accumulate in this vector.
     std::vector<std::unique_ptr<RecordAST>> records;
     while (true) {
       std::unique_ptr<RecordAST> record;
       switch (lexer.getCurToken()) {
-        case tok_eof:
-          break;
-        case tok_def:
-          record = parseDefinition();
-          break;
-        case tok_struct:
-          record = parseStruct();
-          break;
-        default:
-          return parseError<ModuleAST>("'def' or 'struct'",
-                                       "when parsing top level module records");
+      case tok_eof:
+        break;
+      case tok_def:
+        record = parseDefinition();
+        break;
+      case tok_struct:
+        record = parseStruct();
+        break;
+      default:
+        return parseError<ModuleAST>("'def' or 'struct'",
+                                     "when parsing top level module records");
       }
-      if (!record) break;
+      if (!record)
+        break;
       records.push_back(std::move(record));
     }
 
@@ -69,7 +71,7 @@ class Parser {
     return std::make_unique<ModuleAST>(std::move(records));
   }
 
- private:
+private:
   Lexer &lexer;
 
   /// Parse a return statement.
@@ -82,7 +84,8 @@ class Parser {
     std::optional<std::unique_ptr<ExprAST>> expr;
     if (lexer.getCurToken() != ';') {
       expr = parseExpression();
-      if (!expr) return nullptr;
+      if (!expr)
+        return nullptr;
     }
     return std::make_unique<ReturnExprAST>(std::move(loc), std::move(expr));
   }
@@ -112,7 +115,8 @@ class Parser {
       // We can have either another nested array or a number literal.
       if (lexer.getCurToken() == '[') {
         values.push_back(parseTensorLiteralExpr());
-        if (!values.back()) return nullptr;  // parse error in the nested array.
+        if (!values.back())
+          return nullptr; // parse error in the nested array.
       } else {
         if (lexer.getCurToken() != tok_number)
           return parseError<ExprAST>("<num> or [", "in literal expression");
@@ -120,17 +124,18 @@ class Parser {
       }
 
       // End of this list on ']'
-      if (lexer.getCurToken() == ']') break;
+      if (lexer.getCurToken() == ']')
+        break;
 
       // Elements are separated by a comma.
       if (lexer.getCurToken() != ',')
         return parseError<ExprAST>("] or ,", "in literal expression");
 
-      lexer.getNextToken();  // eat ,
+      lexer.getNextToken(); // eat ,
     } while (true);
     if (values.empty())
       return parseError<ExprAST>("<something>", "to fill literal expression");
-    lexer.getNextToken();  // eat ]
+    lexer.getNextToken(); // eat ]
 
     /// Fill in the dimensions now. First the current nesting level:
     dims.push_back(values.size());
@@ -176,10 +181,12 @@ class Parser {
       // We can have either another nested array or a number literal.
       if (lexer.getCurToken() == '[') {
         values.push_back(parseTensorLiteralExpr());
-        if (!values.back()) return nullptr;
+        if (!values.back())
+          return nullptr;
       } else if (lexer.getCurToken() == tok_number) {
         values.push_back(parseNumberExpr());
-        if (!values.back()) return nullptr;
+        if (!values.back())
+          return nullptr;
       } else {
         if (lexer.getCurToken() != '{')
           return parseError<ExprAST>("{, [, or number",
@@ -188,18 +195,19 @@ class Parser {
       }
 
       // End of this list on '}'
-      if (lexer.getCurToken() == '}') break;
+      if (lexer.getCurToken() == '}')
+        break;
 
       // Elements are separated by a comma.
       if (lexer.getCurToken() != ',')
         return parseError<ExprAST>("} or ,", "in struct literal expression");
 
-      lexer.getNextToken();  // eat ,
+      lexer.getNextToken(); // eat ,
     } while (true);
     if (values.empty())
       return parseError<ExprAST>("<something>",
                                  "to fill struct literal expression");
-    lexer.getNextToken();  // eat }
+    lexer.getNextToken(); // eat }
 
     return std::make_unique<StructLiteralExprAST>(std::move(loc),
                                                   std::move(values));
@@ -207,9 +215,10 @@ class Parser {
 
   /// parenexpr ::= '(' expression ')'
   std::unique_ptr<ExprAST> parseParenExpr() {
-    lexer.getNextToken();  // eat (.
+    lexer.getNextToken(); // eat (.
     auto v = parseExpression();
-    if (!v) return nullptr;
+    if (!v)
+      return nullptr;
 
     if (lexer.getCurToken() != ')')
       return parseError<ExprAST>(")", "to close expression with parentheses");
@@ -229,7 +238,8 @@ class Parser {
         else
           return nullptr;
 
-        if (lexer.getCurToken() == ')') break;
+        if (lexer.getCurToken() == ')')
+          break;
 
         if (lexer.getCurToken() != ',')
           return parseError<ExprAST>(", or )", "in argument list");
@@ -258,9 +268,9 @@ class Parser {
     std::string name(lexer.getId());
 
     auto loc = lexer.getLastLocation();
-    lexer.getNextToken();  // eat identifier.
+    lexer.getNextToken(); // eat identifier.
 
-    if (lexer.getCurToken() != '(')  // Simple variable ref.
+    if (lexer.getCurToken() != '(') // Simple variable ref.
       return std::make_unique<VariableExprAST>(std::move(loc), name);
 
     // This is a function call.
@@ -274,24 +284,24 @@ class Parser {
   ///   ::= tensorliteral
   std::unique_ptr<ExprAST> parsePrimary() {
     switch (lexer.getCurToken()) {
-      default:
-        llvm::errs() << "unknown token '" << lexer.getCurToken()
-                     << "' when expecting an expression\n";
-        return nullptr;
-      case tok_identifier:
-        return parseIdentifierExpr();
-      case tok_number:
-        return parseNumberExpr();
-      case '(':
-        return parseParenExpr();
-      case '[':
-        return parseTensorLiteralExpr();
-      case '{':
-        return parseStructLiteralExpr();
-      case ';':
-        return nullptr;
-      case '}':
-        return nullptr;
+    default:
+      llvm::errs() << "unknown token '" << lexer.getCurToken()
+                   << "' when expecting an expression\n";
+      return nullptr;
+    case tok_identifier:
+      return parseIdentifierExpr();
+    case tok_number:
+      return parseNumberExpr();
+    case '(':
+      return parseParenExpr();
+    case '[':
+      return parseTensorLiteralExpr();
+    case '{':
+      return parseStructLiteralExpr();
+    case ';':
+      return nullptr;
+    case '}':
+      return nullptr;
     }
   }
 
@@ -307,7 +317,8 @@ class Parser {
 
       // If this is a binop that binds at least as tightly as the current binop,
       // consume it, otherwise we are done.
-      if (tokPrec < exprPrec) return lhs;
+      if (tokPrec < exprPrec)
+        return lhs;
 
       // Okay, we know this is a binop.
       int binOp = lexer.getCurToken();
@@ -324,7 +335,8 @@ class Parser {
       int nextPrec = getTokPrecedence();
       if (tokPrec < nextPrec) {
         rhs = parseBinOpRHS(tokPrec + 1, std::move(rhs));
-        if (!rhs) return nullptr;
+        if (!rhs)
+          return nullptr;
       }
 
       // Merge lhs/RHS.
@@ -336,7 +348,8 @@ class Parser {
   /// expression::= primary binop rhs
   std::unique_ptr<ExprAST> parseExpression() {
     auto lhs = parsePrimary();
-    if (!lhs) return nullptr;
+    if (!lhs)
+      return nullptr;
 
     return parseBinOpRHS(0, std::move(lhs));
   }
@@ -346,19 +359,20 @@ class Parser {
   std::unique_ptr<VarType> parseType() {
     if (lexer.getCurToken() != '<')
       return parseError<VarType>("<", "to begin type");
-    lexer.getNextToken();  // eat <
+    lexer.getNextToken(); // eat <
 
     auto type = std::make_unique<VarType>();
 
     while (lexer.getCurToken() == tok_number) {
       type->shape.push_back(lexer.getValue());
       lexer.getNextToken();
-      if (lexer.getCurToken() == ',') lexer.getNextToken();
+      if (lexer.getCurToken() == ',')
+        lexer.getNextToken();
     }
 
     if (lexer.getCurToken() != '>')
       return parseError<VarType>(">", "to end type");
-    lexer.getNextToken();  // eat >
+    lexer.getNextToken(); // eat >
     return type;
   }
 
@@ -369,20 +383,22 @@ class Parser {
     lexer.consume(tok_identifier);
 
     // Check for a call expression.
-    if (lexer.getCurToken() == '(') return parseCallExpr(id, loc);
+    if (lexer.getCurToken() == '(')
+      return parseCallExpr(id, loc);
 
     // Otherwise, this is a variable declaration.
     return parseTypedDeclaration(id, /*requiresInitializer=*/true, loc);
   }
 
   /// Parse a typed variable declaration.
-  std::unique_ptr<VarDeclExprAST> parseTypedDeclaration(
-      llvm::StringRef typeName, bool requiresInitializer, const Location &loc) {
+  std::unique_ptr<VarDeclExprAST>
+  parseTypedDeclaration(llvm::StringRef typeName, bool requiresInitializer,
+                        const Location &loc) {
     // Parse the variable name.
     if (lexer.getCurToken() != tok_identifier)
       return parseError<VarDeclExprAST>("name", "in variable declaration");
     std::string id(lexer.getId());
-    lexer.getNextToken();  // eat id
+    lexer.getNextToken(); // eat id
 
     // Parse the initializer.
     std::unique_ptr<ExprAST> expr;
@@ -414,7 +430,7 @@ class Parser {
       return parseError<VarDeclExprAST>("type name", "in variable declaration");
     auto loc = lexer.getLastLocation();
     std::string typeName(lexer.getId());
-    lexer.getNextToken();  // eat id
+    lexer.getNextToken(); // eat id
 
     // Parse the rest of the declaration.
     return parseTypedDeclaration(typeName, requiresInitializer, loc);
@@ -424,25 +440,27 @@ class Parser {
   /// and identifier and an optional type (shape specification) before the
   /// optionally required initializer.
   /// decl ::= var identifier [ type ] (= expr)?
-  std::unique_ptr<VarDeclExprAST> parseVarDeclaration(
-      bool requiresInitializer) {
+  std::unique_ptr<VarDeclExprAST>
+  parseVarDeclaration(bool requiresInitializer) {
     if (lexer.getCurToken() != tok_var)
       return parseError<VarDeclExprAST>("var", "to begin declaration");
     auto loc = lexer.getLastLocation();
-    lexer.getNextToken();  // eat var
+    lexer.getNextToken(); // eat var
 
     if (lexer.getCurToken() != tok_identifier)
       return parseError<VarDeclExprAST>("identified",
                                         "after 'var' declaration");
     std::string id(lexer.getId());
-    lexer.getNextToken();  // eat id
+    lexer.getNextToken(); // eat id
 
-    std::unique_ptr<VarType> type;  // Type is optional, it can be inferred
+    std::unique_ptr<VarType> type; // Type is optional, it can be inferred
     if (lexer.getCurToken() == '<') {
       type = parseType();
-      if (!type) return nullptr;
+      if (!type)
+        return nullptr;
     }
-    if (!type) type = std::make_unique<VarType>();
+    if (!type)
+      type = std::make_unique<VarType>();
 
     std::unique_ptr<ExprAST> expr;
     if (requiresInitializer) {
@@ -467,28 +485,33 @@ class Parser {
     auto exprList = std::make_unique<ExprASTList>();
 
     // Ignore empty expressions: swallow sequences of semicolons.
-    while (lexer.getCurToken() == ';') lexer.consume(Token(';'));
+    while (lexer.getCurToken() == ';')
+      lexer.consume(Token(';'));
 
     while (lexer.getCurToken() != '}' && lexer.getCurToken() != tok_eof) {
       if (lexer.getCurToken() == tok_identifier) {
         // Variable declaration or call
         auto expr = parseDeclarationOrCallExpr();
-        if (!expr) return nullptr;
+        if (!expr)
+          return nullptr;
         exprList->push_back(std::move(expr));
       } else if (lexer.getCurToken() == tok_var) {
         // Variable declaration
         auto varDecl = parseDeclaration(/*requiresInitializer=*/true);
-        if (!varDecl) return nullptr;
+        if (!varDecl)
+          return nullptr;
         exprList->push_back(std::move(varDecl));
       } else if (lexer.getCurToken() == tok_return) {
         // Return statement
         auto ret = parseReturn();
-        if (!ret) return nullptr;
+        if (!ret)
+          return nullptr;
         exprList->push_back(std::move(ret));
       } else {
         // General expression
         auto expr = parseExpression();
-        if (!expr) return nullptr;
+        if (!expr)
+          return nullptr;
         exprList->push_back(std::move(expr));
       }
       // Ensure that elements are separated by a semicolon.
@@ -496,7 +519,8 @@ class Parser {
         return parseError<ExprASTList>(";", "after expression");
 
       // Ignore empty expressions: swallow sequences of semicolons.
-      while (lexer.getCurToken() == ';') lexer.consume(Token(';'));
+      while (lexer.getCurToken() == ';')
+        lexer.consume(Token(';'));
     }
 
     if (lexer.getCurToken() != '}')
@@ -550,7 +574,8 @@ class Parser {
 
         args.push_back(
             std::make_unique<VarDeclExprAST>(std::move(loc), name, type));
-        if (lexer.getCurToken() != ',') break;
+        if (lexer.getCurToken() != ',')
+          break;
         lexer.consume(Token(','));
         if (lexer.getCurToken() != tok_identifier)
           return parseError<PrototypeAST>(
@@ -572,7 +597,8 @@ class Parser {
   /// definition ::= prototype block
   std::unique_ptr<FunctionAST> parseDefinition() {
     auto proto = parsePrototype();
-    if (!proto) return nullptr;
+    if (!proto)
+      return nullptr;
 
     if (auto block = parseBlock())
       return std::make_unique<FunctionAST>(std::move(proto), std::move(block));
@@ -601,7 +627,8 @@ class Parser {
     std::vector<std::unique_ptr<VarDeclExprAST>> decls;
     do {
       auto decl = parseDeclaration(/*requiresInitializer=*/false);
-      if (!decl) return nullptr;
+      if (!decl)
+        return nullptr;
       decls.push_back(std::move(decl));
 
       if (lexer.getCurToken() != ';')
@@ -617,20 +644,21 @@ class Parser {
 
   /// Get the precedence of the pending binary operator token.
   int getTokPrecedence() {
-    if (!isascii(lexer.getCurToken())) return -1;
+    if (!isascii(lexer.getCurToken()))
+      return -1;
 
     // 1 is lowest precedence.
     switch (static_cast<char>(lexer.getCurToken())) {
-      case '-':
-        return 20;
-      case '+':
-        return 20;
-      case '*':
-        return 40;
-      case '.':
-        return 60;
-      default:
-        return -1;
+    case '-':
+      return 20;
+    case '+':
+      return 20;
+    case '*':
+      return 40;
+    case '.':
+      return 60;
+    default:
+      return -1;
     }
   }
 
@@ -643,12 +671,13 @@ class Parser {
     llvm::errs() << "Parse error (" << lexer.getLastLocation().line << ", "
                  << lexer.getLastLocation().col << "): expected '" << expected
                  << "' " << context << " but has Token " << curToken;
-    if (isprint(curToken)) llvm::errs() << " '" << (char)curToken << "'";
+    if (isprint(curToken))
+      llvm::errs() << " '" << (char)curToken << "'";
     llvm::errs() << "\n";
     return nullptr;
   }
 };
 
-}  // namespace toy
+} // namespace toy
 
-#endif  // TOY_PARSER_H
+#endif // TOY_PARSER_H

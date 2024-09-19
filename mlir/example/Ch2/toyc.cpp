@@ -10,7 +10,20 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "toy/AST.h"
+#include "toy/Dialect.h"
+#include "toy/Lexer.h"
+#include "toy/MLIRGen.h"
+#include "toy/Parser.h"
 #include <memory>
+#include <string>
+#include <system_error>
+#include <utility>
+
+#include "mlir/IR/AsmState.h"
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/MLIRContext.h"
+#include "mlir/Parser/Parser.h"
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/CommandLine.h"
@@ -18,14 +31,6 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
-#include "mlir/IR/AsmState.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/MLIRContext.h"
-#include "mlir/IR/Verifier.h"
-#include "mlir/Parser/Parser.h"
-#include "toy/Dialect.h"
-#include "toy/MLIRGen.h"
-#include "toy/Parser.h"
 
 using namespace toy;
 namespace cl = llvm::cl;
@@ -37,7 +42,7 @@ static cl::opt<std::string> inputFilename(cl::Positional,
 
 namespace {
 enum InputType { Toy, MLIR };
-}  // namespace
+} // namespace
 static cl::opt<enum InputType> inputType(
     "x", cl::init(Toy), cl::desc("Decided the kind of output desired"),
     cl::values(clEnumValN(Toy, "toy", "load the input file as a Toy source.")),
@@ -46,7 +51,7 @@ static cl::opt<enum InputType> inputType(
 
 namespace {
 enum Action { None, DumpAST, DumpMLIR };
-}  // namespace
+} // namespace
 static cl::opt<enum Action> emitAction(
     "emit", cl::desc("Select the kind of output desired"),
     cl::values(clEnumValN(DumpAST, "ast", "output the AST dump")),
@@ -73,11 +78,13 @@ int dumpMLIR() {
 
   // Handle '.toy' input to the compiler.
   if (inputType != InputType::MLIR &&
-      !llvm::StringRef(inputFilename).endswith(".mlir")) {
+      !llvm::StringRef(inputFilename).ends_with(".mlir")) {
     auto moduleAST = parseInputFile(inputFilename);
-    if (!moduleAST) return 6;
+    if (!moduleAST)
+      return 6;
     mlir::OwningOpRef<mlir::ModuleOp> module = mlirGen(context, *moduleAST);
-    if (!module) return 1;
+    if (!module)
+      return 1;
 
     module->dump();
     return 0;
@@ -112,7 +119,8 @@ int dumpAST() {
   }
 
   auto moduleAST = parseInputFile(inputFilename);
-  if (!moduleAST) return 1;
+  if (!moduleAST)
+    return 1;
 
   dump(*moduleAST);
   return 0;
@@ -125,13 +133,12 @@ int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv, "toy compiler\n");
 
   switch (emitAction) {
-    case Action::DumpAST:
-      return dumpAST();
-    case Action::DumpMLIR:
-      return dumpMLIR();
-    default:
-      llvm::errs()
-          << "No action specified (parsing only?), use -emit=<action>\n";
+  case Action::DumpAST:
+    return dumpAST();
+  case Action::DumpMLIR:
+    return dumpMLIR();
+  default:
+    llvm::errs() << "No action specified (parsing only?), use -emit=<action>\n";
   }
 
   return 0;

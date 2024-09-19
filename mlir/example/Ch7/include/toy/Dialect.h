@@ -14,12 +14,13 @@
 #ifndef MLIR_TUTORIAL_TOY_DIALECT_H_
 #define MLIR_TUTORIAL_TOY_DIALECT_H_
 
+#include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
-#include "mlir/IR/FunctionInterfaces.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/Interfaces/CallInterfaces.h"
 #include "mlir/Interfaces/CastInterfaces.h"
+#include "mlir/Interfaces/FunctionInterfaces.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "toy/ShapeInferenceInterface.h"
 
@@ -27,9 +28,9 @@ namespace mlir {
 namespace toy {
 namespace detail {
 struct StructTypeStorage;
-}  // namespace detail
-}  // namespace toy
-}  // namespace mlir
+} // namespace detail
+} // namespace toy
+} // namespace mlir
 
 /// Include the auto-generated header file containing the declaration of the toy
 /// dialect.
@@ -58,7 +59,7 @@ namespace toy {
 /// (StructTypeStorage).
 class StructType : public mlir::Type::TypeBase<StructType, mlir::Type,
                                                detail::StructTypeStorage> {
- public:
+public:
   /// Inherit some necessary constructors from 'TypeBase'.
   using Base::Base;
 
@@ -71,8 +72,11 @@ class StructType : public mlir::Type::TypeBase<StructType, mlir::Type,
 
   /// Returns the number of element type held by this struct.
   size_t getNumElementTypes() { return getElementTypes().size(); }
-};
-}  // namespace toy
-}  // namespace mlir
 
-#endif  // MLIR_TUTORIAL_TOY_DIALECT_H_
+  /// The name of this struct type.
+  static constexpr StringLiteral name = "toy.struct";
+};
+} // namespace toy
+} // namespace mlir
+
+#endif // MLIR_TUTORIAL_TOY_DIALECT_H_

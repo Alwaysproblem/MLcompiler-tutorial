@@ -10,12 +10,18 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "toy/AST.h"
+#include "toy/Lexer.h"
+#include "toy/Parser.h"
+
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
-#include "toy/Parser.h"
+#include <memory>
+#include <string>
+#include <system_error>
 
 using namespace toy;
 namespace cl = llvm::cl;
@@ -26,11 +32,11 @@ static cl::opt<std::string> inputFilename(cl::Positional,
                                           cl::value_desc("filename"));
 namespace {
 enum Action { None, DumpAST };
-}  // namespace
+} // namespace
 
-static cl::opt<enum Action> emitAction(
-    "emit", cl::desc("Select the kind of output desired"),
-    cl::values(clEnumValN(DumpAST, "ast", "output the AST dump")));
+static cl::opt<enum Action>
+    emitAction("emit", cl::desc("Select the kind of output desired"),
+               cl::values(clEnumValN(DumpAST, "ast", "output the AST dump")));
 
 /// Returns a Toy AST resulting from parsing the file or a nullptr on error.
 std::unique_ptr<toy::ModuleAST> parseInputFile(llvm::StringRef filename) {
@@ -50,15 +56,15 @@ int main(int argc, char **argv) {
   cl::ParseCommandLineOptions(argc, argv, "toy compiler\n");
 
   auto moduleAST = parseInputFile(inputFilename);
-  if (!moduleAST) return 1;
+  if (!moduleAST)
+    return 1;
 
   switch (emitAction) {
-    case Action::DumpAST:
-      dump(*moduleAST);
-      return 0;
-    default:
-      llvm::errs()
-          << "No action specified (parsing only?), use -emit=<action>\n";
+  case Action::DumpAST:
+    dump(*moduleAST);
+    return 0;
+  default:
+    llvm::errs() << "No action specified (parsing only?), use -emit=<action>\n";
   }
 
   return 0;

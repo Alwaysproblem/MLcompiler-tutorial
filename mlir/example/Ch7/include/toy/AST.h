@@ -15,14 +15,14 @@
 #ifndef TOY_AST_H
 #define TOY_AST_H
 
-#include <optional>
-#include <utility>
-#include <vector>
+#include "toy/Lexer.h"
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
-#include "toy/Lexer.h"
+#include <utility>
+#include <vector>
+#include <optional>
 
 namespace toy {
 
@@ -34,7 +34,7 @@ struct VarType {
 
 /// Base class for all expression nodes.
 class ExprAST {
- public:
+public:
   enum ExprASTKind {
     Expr_VarDecl,
     Expr_Return,
@@ -55,7 +55,7 @@ class ExprAST {
 
   const Location &loc() { return location; }
 
- private:
+private:
   const ExprASTKind kind;
   Location location;
 };
@@ -67,7 +67,7 @@ using ExprASTList = std::vector<std::unique_ptr<ExprAST>>;
 class NumberExprAST : public ExprAST {
   double val;
 
- public:
+public:
   NumberExprAST(Location loc, double val)
       : ExprAST(Expr_Num, std::move(loc)), val(val) {}
 
@@ -82,11 +82,10 @@ class LiteralExprAST : public ExprAST {
   std::vector<std::unique_ptr<ExprAST>> values;
   std::vector<int64_t> dims;
 
- public:
+public:
   LiteralExprAST(Location loc, std::vector<std::unique_ptr<ExprAST>> values,
                  std::vector<int64_t> dims)
-      : ExprAST(Expr_Literal, std::move(loc)),
-        values(std::move(values)),
+      : ExprAST(Expr_Literal, std::move(loc)), values(std::move(values)),
         dims(std::move(dims)) {}
 
   llvm::ArrayRef<std::unique_ptr<ExprAST>> getValues() { return values; }
@@ -100,11 +99,11 @@ class LiteralExprAST : public ExprAST {
 class StructLiteralExprAST : public ExprAST {
   std::vector<std::unique_ptr<ExprAST>> values;
 
- public:
+public:
   StructLiteralExprAST(Location loc,
                        std::vector<std::unique_ptr<ExprAST>> values)
-      : ExprAST(Expr_StructLiteral, std::move(loc)),
-        values(std::move(values)) {}
+      : ExprAST(Expr_StructLiteral, std::move(loc)), values(std::move(values)) {
+  }
 
   llvm::ArrayRef<std::unique_ptr<ExprAST>> getValues() { return values; }
 
@@ -118,7 +117,7 @@ class StructLiteralExprAST : public ExprAST {
 class VariableExprAST : public ExprAST {
   std::string name;
 
- public:
+public:
   VariableExprAST(Location loc, llvm::StringRef name)
       : ExprAST(Expr_Var, std::move(loc)), name(name) {}
 
@@ -134,13 +133,11 @@ class VarDeclExprAST : public ExprAST {
   VarType type;
   std::unique_ptr<ExprAST> initVal;
 
- public:
+public:
   VarDeclExprAST(Location loc, llvm::StringRef name, VarType type,
                  std::unique_ptr<ExprAST> initVal = nullptr)
-      : ExprAST(Expr_VarDecl, std::move(loc)),
-        name(name),
-        type(std::move(type)),
-        initVal(std::move(initVal)) {}
+      : ExprAST(Expr_VarDecl, std::move(loc)), name(name),
+        type(std::move(type)), initVal(std::move(initVal)) {}
 
   llvm::StringRef getName() { return name; }
   ExprAST *getInitVal() { return initVal.get(); }
@@ -154,12 +151,13 @@ class VarDeclExprAST : public ExprAST {
 class ReturnExprAST : public ExprAST {
   std::optional<std::unique_ptr<ExprAST>> expr;
 
- public:
+public:
   ReturnExprAST(Location loc, std::optional<std::unique_ptr<ExprAST>> expr)
       : ExprAST(Expr_Return, std::move(loc)), expr(std::move(expr)) {}
 
   std::optional<ExprAST *> getExpr() {
-    if (expr.has_value()) return expr->get();
+    if (expr.has_value())
+      return expr->get();
     return std::nullopt;
   }
 
@@ -172,16 +170,14 @@ class BinaryExprAST : public ExprAST {
   char op;
   std::unique_ptr<ExprAST> lhs, rhs;
 
- public:
+public:
   char getOp() { return op; }
   ExprAST *getLHS() { return lhs.get(); }
   ExprAST *getRHS() { return rhs.get(); }
 
   BinaryExprAST(Location loc, char op, std::unique_ptr<ExprAST> lhs,
                 std::unique_ptr<ExprAST> rhs)
-      : ExprAST(Expr_BinOp, std::move(loc)),
-        op(op),
-        lhs(std::move(lhs)),
+      : ExprAST(Expr_BinOp, std::move(loc)), op(op), lhs(std::move(lhs)),
         rhs(std::move(rhs)) {}
 
   /// LLVM style RTTI
@@ -193,11 +189,10 @@ class CallExprAST : public ExprAST {
   std::string callee;
   std::vector<std::unique_ptr<ExprAST>> args;
 
- public:
+public:
   CallExprAST(Location loc, const std::string &callee,
               std::vector<std::unique_ptr<ExprAST>> args)
-      : ExprAST(Expr_Call, std::move(loc)),
-        callee(callee),
+      : ExprAST(Expr_Call, std::move(loc)), callee(callee),
         args(std::move(args)) {}
 
   llvm::StringRef getCallee() { return callee; }
@@ -211,7 +206,7 @@ class CallExprAST : public ExprAST {
 class PrintExprAST : public ExprAST {
   std::unique_ptr<ExprAST> arg;
 
- public:
+public:
   PrintExprAST(Location loc, std::unique_ptr<ExprAST> arg)
       : ExprAST(Expr_Print, std::move(loc)), arg(std::move(arg)) {}
 
@@ -229,7 +224,7 @@ class PrototypeAST {
   std::string name;
   std::vector<std::unique_ptr<VarDeclExprAST>> args;
 
- public:
+public:
   PrototypeAST(Location location, const std::string &name,
                std::vector<std::unique_ptr<VarDeclExprAST>> args)
       : location(std::move(location)), name(name), args(std::move(args)) {}
@@ -241,7 +236,7 @@ class PrototypeAST {
 
 /// This class represents a top level record in a module.
 class RecordAST {
- public:
+public:
   enum RecordASTKind {
     Record_Function,
     Record_Struct,
@@ -252,7 +247,7 @@ class RecordAST {
 
   RecordASTKind getKind() const { return kind; }
 
- private:
+private:
   const RecordASTKind kind;
 };
 
@@ -261,11 +256,10 @@ class FunctionAST : public RecordAST {
   std::unique_ptr<PrototypeAST> proto;
   std::unique_ptr<ExprASTList> body;
 
- public:
+public:
   FunctionAST(std::unique_ptr<PrototypeAST> proto,
               std::unique_ptr<ExprASTList> body)
-      : RecordAST(Record_Function),
-        proto(std::move(proto)),
+      : RecordAST(Record_Function), proto(std::move(proto)),
         body(std::move(body)) {}
   PrototypeAST *getProto() { return proto.get(); }
   ExprASTList *getBody() { return body.get(); }
@@ -282,12 +276,10 @@ class StructAST : public RecordAST {
   std::string name;
   std::vector<std::unique_ptr<VarDeclExprAST>> variables;
 
- public:
+public:
   StructAST(Location location, const std::string &name,
             std::vector<std::unique_ptr<VarDeclExprAST>> variables)
-      : RecordAST(Record_Struct),
-        location(std::move(location)),
-        name(name),
+      : RecordAST(Record_Struct), location(std::move(location)), name(name),
         variables(std::move(variables)) {}
 
   const Location &loc() { return location; }
@@ -306,7 +298,7 @@ class StructAST : public RecordAST {
 class ModuleAST {
   std::vector<std::unique_ptr<RecordAST>> records;
 
- public:
+public:
   ModuleAST(std::vector<std::unique_ptr<RecordAST>> records)
       : records(std::move(records)) {}
 
@@ -316,6 +308,6 @@ class ModuleAST {
 
 void dump(ModuleAST &);
 
-}  // namespace toy
+} // namespace toy
 
-#endif  // TOY_AST_H
+#endif // TOY_AST_H
