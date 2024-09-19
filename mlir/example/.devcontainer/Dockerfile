@@ -29,4 +29,4 @@ RUN echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy main" > /etc/apt/s
 
 RUN git config --global --add safe.directory '*' && \
     /root/.local/bin/setup_new_user ${UID} ${GID} && \
-    python3 -m pip install pre-commit
+    python3 -m pip install pre-commit compdb
