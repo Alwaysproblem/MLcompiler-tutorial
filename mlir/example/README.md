@@ -953,3 +953,30 @@ $ ./vscode_build/Ch8/mlir-example-ch8 Ch8/matmul.toy.mlir -emit=mlir
 #   }
 # }
 ```
+
+- transform Ch2
+
+```bash
+$ ./build/transform_Ch2/transform-opt-ch2 --transform-interpreter tests/transform/Ch2/ops.mlir
+# module {
+#   func.func private @orig()
+#   func.func private @updated()
+#   func.func @test() {
+#     call @updated() : () -> () # <---- This will be changed to @updated from @orig
+#     return
+#   }
+#   module attributes {transform.with_named_sequence} {
+#     transform.named_sequence @__transform_main(%arg0: !transform.any_op) {
+#       %0 = transform.structured.match ops{["func.call"]} in %arg0 : (!transform.any_op) -> !transform.any_op
+#       transform.my.change_call_target %0, "updated" : !transform.any_op
+#       transform.yield
+#     }
+#   }
+# }
+```
+
+- transform Ch3
+
+```bash
+$ ./build/transform_Ch3/transform-opt-ch3 --transform-interpreter tests/transform/Ch3/ops.mlir
+```
