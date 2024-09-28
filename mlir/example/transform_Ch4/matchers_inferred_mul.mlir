@@ -6,9 +6,10 @@ func.func @named(
     %bias: tensor<512x512xf32>, %output: tensor<512x512xf32>)
     -> tensor<512x512xf32> {
   // expected-remark @below {{matmul}}
-  %matmul = linalg.matmul ins(%lhs, %rhs: tensor<512x512xf32>, tensor<512x512xf32>)
-                          outs(%output: tensor<512x512xf32>) -> tensor<512x512xf32>
-  func.return %matmul : tensor<512x512xf32>
+  %mul = linalg.elemwise_binary { fun = #linalg.binary_fn<add> }
+    ins(%lhs, %rhs: tensor<512x512xf32>, tensor<512x512xf32>)
+    outs(%output: tensor<512x512xf32>) -> tensor<512x512xf32>
+  func.return %mul : tensor<512x512xf32>
 }
 
 // Matmul as a generic operation.
@@ -17,20 +18,19 @@ func.func @generic(
     %bias: tensor<512x512xf32>, %output: tensor<512x512xf32>)
     -> tensor<512x512xf32> {
   // expected-remark @below {{matmul}}
-  %matmul = linalg.generic {
-    iterator_types = ["parallel", "parallel", "reduction"],
+  %mul = linalg.generic {
+    iterator_types = ["parallel", "parallel"],
     indexing_maps = [
-      affine_map<(d0, d1, d2) -> (d0, d2)>,
-      affine_map<(d0, d1, d2) -> (d2, d1)>,
-      affine_map<(d0, d1, d2) -> (d0, d1)>]
+      affine_map<(d0, d1) -> (d0, d1)>,
+      affine_map<(d0, d1) -> (d0, d1)>,
+      affine_map<(d0, d1) -> (d0, d1)>]
   } ins(%lhs, %rhs: tensor<512x512xf32>, tensor<512x512xf32>)
     outs(%output: tensor<512x512xf32>) {
   ^bb0(%arg0: f32, %arg1: f32, %arg2: f32):
     %0 = arith.mulf %arg0, %arg1 : f32
-    %1 = arith.addf %0, %arg2 : f32
-    linalg.yield %1 : f32
+    linalg.yield %0 : f32
   } -> tensor<512x512xf32>
-  return %matmul : tensor<512x512xf32>
+  return %mul : tensor<512x512xf32>
 }
 
 // The module containing named sequences must have an attribute allowing them
@@ -63,15 +63,22 @@ module @transforms attributes { transform.with_named_sequence } {
     transform.yield
   }
 
+  // This is an action sequence.
+  transform.named_sequence @match_arith_mulf(
+      %matmul: !transform.any_op {transform.readonly}) {
+    transform.match.operation_name %matmul ["arith.mulf"] : !transform.any_op
+    transform.yield
+  }
+
   transform.named_sequence @match_generic_matmul(
       %candidate: !transform.any_op {transform.readonly}) -> !transform.any_op {
     // Match a structured linear algebra operation.
     transform.match.structured %candidate : !transform.any_op {
     ^bb0(%c: !transform.any_op):
-      // With a rank equal to 3.
+      // With a rank equal to 2.
       %rank = transform.match.structured.rank %c
         : (!transform.any_op) -> !transform.param<i64>
-      %c3 = transform.param.constant 3 : i64 -> !transform.param<i64>
+      %c3 = transform.param.constant 2 : i64 -> !transform.param<i64>
       transform.match.param.cmpi eq %rank, %c3 : !transform.param<i64>
 
       // With 2 inputs.
@@ -88,15 +95,19 @@ module @transforms attributes { transform.with_named_sequence } {
       transform.match.param.cmpi eq %n_inits, %c1 : !transform.param<i64>
 
       // All inputs and inits are accessed with a projected permutation.
-      transform.match.structured.input %c[all] {projected_permutation}
+      transform.match.structured.input %c[all] {identity}
         : !transform.any_op
-      transform.match.structured.init %c[0] {projected_permutation}
+      transform.match.structured.init %c[0] {identity}
         : !transform.any_op
 
       // The body is a mulf/addf contraction with appropriate dimensions.
       transform.match.structured.body %c
-        { contraction = ["arith.mulf", "arith.addf"] } : !transform.any_op
-      %batch, %lhs, %rhs, %reduction =
+        { elementwise } : !transform.any_op
+
+      transform.match.structured.dim %c[all] {parallel}
+        : !transform.any_op
+
+      %batch, %lhs, %rhs, %_ =
       transform.match.structured.classify_contraction_dims %c
         : (!transform.any_op)
         -> (!transform.param<i64>, !transform.param<i64>, !transform.param<i64>,
@@ -104,24 +115,16 @@ module @transforms attributes { transform.with_named_sequence } {
 
       // There is one of lhs, rhs and reduction dimensions and zero batch
       // dimensions.
-      // 批处理维度（Batch Dimensions）：不参与计算，但在整个计算过程中保持不变的维度。
-      // 左操作数维度（LHS Dimensions）：与左侧输入（左操作数）相关的维度。
-      // 右操作数维度（RHS Dimensions）：与右侧输入（右操作数）相关的维度。
-      // 归约维度（Reduction Dimensions）：在计算中进行归约操作（如求和）的维度。
-
       %n_batch = transform.num_associations %batch
         : (!transform.param<i64>) -> !transform.param<i64>
       %n_lhs = transform.num_associations %lhs
         : (!transform.param<i64>) -> !transform.param<i64>
       %n_rhs = transform.num_associations %rhs
         : (!transform.param<i64>) -> !transform.param<i64>
-      %n_reduction = transform.num_associations %reduction
-        : (!transform.param<i64>) -> !transform.param<i64>
       %c0 = transform.param.constant 0 : i64 -> !transform.param<i64>
-      transform.match.param.cmpi eq %n_batch, %c0 : !transform.param<i64>
-      transform.match.param.cmpi eq %n_lhs, %c1 : !transform.param<i64>
-      transform.match.param.cmpi eq %n_rhs, %c1 : !transform.param<i64>
-      transform.match.param.cmpi eq %n_reduction, %c1 : !transform.param<i64>
+      transform.match.param.cmpi eq %n_batch, %c2 : !transform.param<i64>
+      transform.match.param.cmpi eq %n_lhs, %c0 : !transform.param<i64>
+      transform.match.param.cmpi eq %n_rhs, %c0 : !transform.param<i64>
     }
     transform.yield %candidate : !transform.any_op
   }
