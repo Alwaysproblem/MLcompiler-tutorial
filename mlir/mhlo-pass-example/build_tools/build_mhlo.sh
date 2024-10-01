@@ -24,6 +24,8 @@ cmake -GNinja \
     "-H$MHLO_SRC_DIR" \
     "-B$build_dir" \
     -DLLVM_ENABLE_LLD=ON \
+    -DCMAKE_C_COMPILER=clang \
+    -DCMAKE_CXX_COMPILER=clang++ \
     -DCMAKE_BUILD_TYPE=Release \
     -DLLVM_ENABLE_ASSERTIONS=On \
     -DLLVM_EXTERNAL_LIT=${LLVM_BUILD_DIR}/../../external/llvm-project/build/bin/llvm-lit \

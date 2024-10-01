@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
     return err;
   };
 
-  llvm::outs() << "Input mhlo mlir:" << '\n';
+  llvm::dbgs() << "Input mhlo mlir:" << '\n';
   module->dump();
 
   if (enableOpt) {
@@ -87,8 +87,10 @@ int main(int argc, char *argv[]) {
       return 4;
   }
 
-  llvm::outs() << "After Conversion:" << '\n';
+  llvm::dbgs() << "After Conversion:"
+               << "\n\n";
   module->dump();
+  module->print(llvm::outs());
 
   return 0;
 }

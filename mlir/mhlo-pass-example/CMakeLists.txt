@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.10)
 # note: fix ztd terminfo not found
 project(mlir-example LANGUAGES C CXX)
 
-# if(LLVM_ENABLE_LLD) set(CMAKE_C_FLAGS "-fuse-ld=lld") set(CMAKE_CXX_FLAGS
-# "-fuse-ld=lld") endif()
+# if(LLVM_ENABLE_LLD) set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fuse-ld=lld")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fuse-ld=lld") endif()
 
 # ############## For conda users.################################
 find_package(MHLO CONFIG REQUIRED)
@@ -48,3 +48,4 @@ add_subdirectory(Tanh)
 add_subdirectory(ExpLog)
 add_subdirectory(Outline)
 add_subdirectory(Inline)
+add_subdirectory(tests)

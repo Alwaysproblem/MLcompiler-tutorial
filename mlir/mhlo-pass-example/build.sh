@@ -30,9 +30,10 @@ cmake ..  -G Ninja --no-warn-unused-cli \
   -DMHLO_DIR=${_workspaceFolder}/third_party/mhlo/lib/cmake/mlir-hlo \
   -DMLIR_TABLEGEN_EXE=${_workspaceFolder}/third_party/llvm/bin/mlir-tblgen \
   -DCMAKE_BUILD_TYPE:STRING=Debug \
-  -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc \
-  -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++
-  # -DLLVM_ENABLE_LLD=ON \
+  -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/clang \
+  -DLLVM_ENABLE_LLD=ON \
+  -DLLVM_EXTERNAL_LIT=${_workspaceFolder}/external/llvm-project/build/bin/llvm-lit \
+  -DCMAKE_CXX_COMPILER:FILEPATH=/usr/bin/clang++
   # -DCMAKE_MODULE_PATH="${_workspaceFolder}/external/llvm-project/build/lib/cmake/mlir;${_workspaceFolder}/external/llvm-project/build/lib/cmake/llvm;${_workspaceFolder}/third_party/mhlo/lib/cmake/mlir-hlo" \
 
 # ninja

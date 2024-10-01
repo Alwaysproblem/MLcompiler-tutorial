@@ -14,10 +14,10 @@
 
 set -e
 
-if [[ $# -ne 2 ]] ; then
-  echo "Usage: $0 <path/to/llvm> <build_dir>"
-  exit 1
-fi
+#if [[ $# -ne 2 ]] ; then
+#  echo "Usage: $0 <path/to/llvm> <build_dir>"
+#  exit 1
+#fi
 
 # LLVM source
 LLVM_SRC_DIR="${1:-third_party/llvm-project}"
