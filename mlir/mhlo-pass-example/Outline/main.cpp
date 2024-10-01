@@ -87,9 +87,10 @@ int main(int argc, char *argv[]) {
       return 4;
   }
 
-  llvm::dbgs() << "After Conversion:"
-               << "\n\n";
+  llvm::dbgs() << "After Conversion:" << '\n';
   module->dump();
+  llvm::dbgs()
+      << "------------------------------------------------------------\n";
   module->print(llvm::outs());
 
   return 0;

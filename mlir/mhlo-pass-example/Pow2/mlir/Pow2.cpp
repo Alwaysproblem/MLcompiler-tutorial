@@ -89,6 +89,10 @@ void SubstitutePow2PdllPass::runOnOperation() {
 }
 
 namespace {
+struct Pow2PassOptions {
+  bool Pow2Pass = true;
+};
+
 #define GEN_PASS_DEF_POW2PASS
 #include "Pow2Pass.inc"
 } // namespace
@@ -116,7 +120,7 @@ std::unique_ptr<mlir::Pass> mhlo::createSubstitutePow2Pass() {
   // 2. use the pdll to rewrite the IR
   // return std::make_unique<SubstitutePow2PdllPass>();
   // 3. use tddr to generate pass declaration.
-  return std::make_unique<SubstitutePow2PdllPass>();
+  return std::make_unique<SubstitutePow2PdllGenPass>();
 }
 
 /// An interesting analysis.

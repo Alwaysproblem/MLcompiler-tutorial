@@ -61,6 +61,13 @@ int main(int argc, char *argv[]) {
   context.loadDialect<mlir::mhlo::MhloDialect, mlir::func::FuncDialect,
                       mlir::pdl::PDLDialect>();
 
+  // Here we can initialize the context with registered dialects
+  // mlir::DialectRegistry registry;
+  // registry.insert<mlir::mhlo::MhloDialect, mlir::func::FuncDialect,
+  //                 mlir::pdl::PDLDialect>();
+
+  // mlir::MLIRContext context(registry);
+
   mlir::OwningOpRef<mlir::ModuleOp> module;
   llvm::SourceMgr sourceMgr;
   mlir::SourceMgrDiagnosticHandler sourceMgrHandler(sourceMgr, &context);
@@ -83,15 +90,16 @@ int main(int argc, char *argv[]) {
     // pm.addNestedPass<mlir::func::FuncOp>(mlir::createCanonicalizerPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         mlir::mhlo::createSubstitutePow2Pass());
-    pm.addNestedPass<mlir::func::FuncOp>(mlir::mhlo::createStaticOpCounter());
+    // pm.addNestedPass<mlir::func::FuncOp>(mlir::mhlo::createStaticOpCounter());
 
     if (mlir::failed(pm.run(*module)))
       return 4;
   }
 
-  llvm::dbgs() << "After Conversion:"
-               << "\n\n";
+  llvm::dbgs() << "After Conversion:" << '\n';
   module->dump();
+  llvm::dbgs()
+      << "------------------------------------------------------------\n";
   module->print(llvm::outs());
 
   return 0;

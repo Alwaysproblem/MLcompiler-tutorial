@@ -13,9 +13,15 @@ def Pow2Pass : Pass<"pow-2", "func::FuncOp"> {
 
   // Specify any options.
   let options = [
+    Option</*C++ variable name=*/"Pow2Pass", /*argument*/"pow2-opt",
+           /*type*/"bool", /*default=*/"false",
+           /*description*/"Enable Pow2 Optimization">,
   ];
 
   // Specify any statistics.
   let statistics = [
+    // Statistic</*C++ variable name=*/"statistic",
+    //           /*display name*/"example-statistic",
+    //           /*description*/"An example statistic">
   ];
 }
