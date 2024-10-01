@@ -24,6 +24,29 @@ For the `pass` implementation, there are 3 ways to do it:
 
 The Pow2 part will illustrate those ways to implement a pass.
 
+## Environment Setup
+
+### Environment Preparation with dev containers
+
+Please choose the `Dev Containers: Open Folder in Container...`
+
+- build example with dev containers
+
+```bash
+cd mhlo-phlo-prototype
+bash build_tools/sync_deps.sh
+bash build_tools/build_deps.sh
+bash build.sh check-mhlo-pass-tutor
+```
+
+## Configure the Clangd
+
+```bash
+cd mhlo-phlo-prototype
+# after you configure the project with cmake, you can configure the clangd by run the following command
+compdb -p build list > compile_commands.json
+```
+
 ## Pow 2 into x by x substitution pass
 
 Here is the example for pow2 pass:
