@@ -1,4 +1,3 @@
 build --action_env LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/root/miniconda3/envs/jax-build/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64"
 build --action_env LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/root/miniconda3/envs/jax-build/lib"
 build --action_env TMP="/tmp"
-

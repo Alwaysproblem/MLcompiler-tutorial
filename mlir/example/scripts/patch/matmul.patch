@@ -1,8 +1,73 @@
-diff --git a/mlir/example/Ch8/include/toy/Ops.td b/mlir/example/Ch8/include/toy/Ops.td
-index 157e207..298bd3e 100644
---- a/mlir/example/Ch8/include/toy/Ops.td
-+++ b/mlir/example/Ch8/include/toy/Ops.td
-@@ -367,4 +367,31 @@ def TransposeOp : Toy_Op<"transpose",
+diff -urN Ch7/CMakeLists.txt Ch8/CMakeLists.txt
+--- Ch7/CMakeLists.txt	2023-12-06 04:57:18.788273480 +0000
++++ Ch8/CMakeLists.txt	2024-10-01 13:51:09.920421616 +0000
+@@ -6,10 +6,10 @@
+
+ set(LLVM_TARGET_DEFINITIONS mlir/ToyCombine.td)
+ mlir_tablegen(ToyCombine.inc -gen-rewriters)
+-add_public_tablegen_target(ToyCh7CombineIncGen)
++add_public_tablegen_target(ToyCh8CombineIncGen)
+
+ add_executable(
+-  mlir-example-ch7
++  mlir-example-ch8
+   toyc.cpp
+   parser/AST.cpp
+   mlir/MLIRGen.cpp
+@@ -19,8 +19,8 @@
+   mlir/ShapeInferencePass.cpp
+   mlir/ToyCombine.cpp)
+
+-add_dependencies(mlir-example-ch7 ToyCh7ShapeInferenceInterfaceIncGen
+-                 ToyCh7OpsIncGen ToyCh7CombineIncGen)
++add_dependencies(mlir-example-ch8 ToyCh8ShapeInferenceInterfaceIncGen
++                 ToyCh8OpsIncGen ToyCh8CombineIncGen)
+
+ include_directories(${CMAKE_CURRENT_BINARY_DIR})
+ include_directories(${CMAKE_CURRENT_BINARY_DIR}/include/)
+@@ -28,7 +28,7 @@
+ get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
+ get_property(extension_libs GLOBAL PROPERTY MLIR_EXTENSION_LIBS)
+ target_link_libraries(
+-  mlir-example-ch7
++  mlir-example-ch8
+   PRIVATE ${dialect_libs}
+           ${conversion_libs}
+           ${extension_libs}
+diff -urN Ch7/include/toy/AST.h Ch8/include/toy/AST.h
+--- Ch7/include/toy/AST.h	2024-09-22 10:55:44.710339034 +0000
++++ Ch8/include/toy/AST.h	2024-10-01 13:51:14.420421786 +0000
+@@ -20,9 +20,9 @@
+ #include "llvm/ADT/ArrayRef.h"
+ #include "llvm/ADT/StringRef.h"
+ #include "llvm/Support/Casting.h"
++#include <optional>
+ #include <utility>
+ #include <vector>
+-#include <optional>
+
+ namespace toy {
+
+diff -urN Ch7/include/toy/CMakeLists.txt Ch8/include/toy/CMakeLists.txt
+--- Ch7/include/toy/CMakeLists.txt	2023-12-06 04:57:18.788273480 +0000
++++ Ch8/include/toy/CMakeLists.txt	2024-10-01 13:51:15.848421840 +0000
+@@ -4,10 +4,10 @@
+ mlir_tablegen(Ops.cpp.inc -gen-op-defs)
+ mlir_tablegen(Dialect.h.inc -gen-dialect-decls)
+ mlir_tablegen(Dialect.cpp.inc -gen-dialect-defs)
+-add_public_tablegen_target(ToyCh7OpsIncGen)
++add_public_tablegen_target(ToyCh8OpsIncGen)
+
+ # Most dialects should use add_mlir_interfaces().
+ set(LLVM_TARGET_DEFINITIONS ShapeInferenceInterface.td)
+ mlir_tablegen(ShapeInferenceOpInterfaces.h.inc -gen-op-interface-decls)
+ mlir_tablegen(ShapeInferenceOpInterfaces.cpp.inc -gen-op-interface-defs)
+-add_public_tablegen_target(ToyCh7ShapeInferenceInterfaceIncGen)
++add_public_tablegen_target(ToyCh8ShapeInferenceInterfaceIncGen)
+diff -urN Ch7/include/toy/Ops.td Ch8/include/toy/Ops.td
+--- Ch7/include/toy/Ops.td	2024-09-22 10:55:44.710339034 +0000
++++ Ch8/include/toy/Ops.td	2024-10-01 13:51:17.112421888 +0000
+@@ -450,4 +450,31 @@
    let hasVerifier = 1;
  }
 
@@ -34,11 +99,41 @@ index 157e207..298bd3e 100644
 +}
 +
  #endif // TOY_OPS
-diff --git a/mlir/example/Ch8/matmul.toy.mlir b/mlir/example/Ch8/matmul.toy.mlir
-new file mode 100644
-index 0000000..5a0cd7e
---- /dev/null
-+++ b/mlir/example/Ch8/matmul.toy.mlir
+diff -urN Ch7/include/toy/Parser.h Ch8/include/toy/Parser.h
+--- Ch7/include/toy/Parser.h	2024-09-22 10:55:44.714339101 +0000
++++ Ch8/include/toy/Parser.h	2024-10-01 13:51:18.412421937 +0000
+@@ -22,9 +22,9 @@
+ #include "llvm/Support/raw_ostream.h"
+
+ #include <map>
++#include <optional>
+ #include <utility>
+ #include <vector>
+-#include <optional>
+
+ namespace toy {
+
+diff -urN Ch7/matmul.toy Ch8/matmul.toy
+--- Ch7/matmul.toy	1970-01-01 00:00:00.000000000 +0000
++++ Ch8/matmul.toy	2024-10-01 13:51:11.744421685 +0000
+@@ -0,0 +1,14 @@
++def main() {
++  # Define a variable `a` with shape <2, 3>, initialized with the literal value.
++  # The shape is inferred from the supplied literal.
++  var a = [[1, 2, 3], [4, 5, 6]];
++
++  # b is identical to a, the literal tensor is implicitly reshaped: defining new
++  # variables is the way to reshape tensors (element count must match).
++  var b<2, 3> = [1, 2, 3, 4, 5, 6];
++
++  # transpose() and print() are the only builtin, the following will transpose
++  # a and b and perform an element-wise multiplication before printing the result.
++  # print(a * b + b);
++  print(matmul(a, transpose(b)));
++}
+diff -urN Ch7/matmul.toy.mlir Ch8/matmul.toy.mlir
+--- Ch7/matmul.toy.mlir	1970-01-01 00:00:00.000000000 +0000
++++ Ch8/matmul.toy.mlir	2024-10-01 13:51:13.056421735 +0000
 @@ -0,0 +1,16 @@
 +toy.func private @matmul_transpose(%arg0: tensor<*xf64>, %arg1: tensor<*xf64>) -> tensor<*xf64> {
 +  %0 = toy.transpose(%arg0 : tensor<*xf64>) to tensor<*xf64>
@@ -56,11 +151,28 @@ index 0000000..5a0cd7e
 +  toy.print %4 : tensor<*xf64>
 +  toy.return
 +}
-diff --git a/mlir/example/Ch8/mlir/Dialect.cpp b/mlir/example/Ch8/mlir/Dialect.cpp
-index 6ec105a..d750782 100644
---- a/mlir/example/Ch8/mlir/Dialect.cpp
-+++ b/mlir/example/Ch8/mlir/Dialect.cpp
-@@ -439,6 +439,63 @@ mlir::LogicalResult TransposeOp::verify() {
+diff -urN Ch7/mlir/Dialect.cpp Ch8/mlir/Dialect.cpp
+--- Ch7/mlir/Dialect.cpp	2024-09-22 10:55:44.714339101 +0000
++++ Ch8/mlir/Dialect.cpp	2024-10-01 13:51:19.988421996 +0000
+@@ -13,6 +13,7 @@
+
+ #include "toy/Dialect.h"
+
++#include "mlir/Dialect/Arith/Utils/Utils.h"
+ #include "mlir/IR/Attributes.h"
+ #include "mlir/IR/Builders.h"
+ #include "mlir/IR/BuiltinAttributes.h"
+@@ -429,7 +430,8 @@
+   auto resultType = results.front();
+
+   // Check that the result type of the function matches the operand type.
+-  if (inputType == resultType || llvm::isa<mlir::UnrankedTensorType>(inputType) ||
++  if (inputType == resultType ||
++      llvm::isa<mlir::UnrankedTensorType>(inputType) ||
+       llvm::isa<mlir::UnrankedTensorType>(resultType))
+     return mlir::success();
+
+@@ -497,6 +499,58 @@
    return mlir::success();
  }
 
@@ -115,6 +227,147 @@ index 6ec105a..d750782 100644
 +
 +  return mlir::success();
 +}
++
  //===----------------------------------------------------------------------===//
- // TableGen'd op method definitions
+ // Toy Types
  //===----------------------------------------------------------------------===//
+diff -urN Ch7/mlir/LowerToAffineLoops.cpp Ch8/mlir/LowerToAffineLoops.cpp
+--- Ch7/mlir/LowerToAffineLoops.cpp	2024-09-22 10:55:44.714339101 +0000
++++ Ch8/mlir/LowerToAffineLoops.cpp	2024-10-01 13:51:21.668422059 +0000
+@@ -19,6 +19,7 @@
+ #include "mlir/IR/Diagnostics.h"
+ #include "mlir/IR/DialectRegistry.h"
+ #include "mlir/IR/PatternMatch.h"
++#include "mlir/IR/Value.h"
+ #include "mlir/IR/ValueRange.h"
+ #include "mlir/Support/LLVM.h"
+ #include "mlir/Support/TypeID.h"
+@@ -31,6 +32,7 @@
+ #include "mlir/Dialect/MemRef/IR/MemRef.h"
+ #include "mlir/Pass/Pass.h"
+ #include "mlir/Transforms/DialectConversion.h"
++#include "llvm/ADT/APFloat.h"
+ #include "llvm/ADT/ArrayRef.h"
+ #include "llvm/ADT/STLExtras.h"
+ #include "llvm/ADT/Sequence.h"
+@@ -315,6 +317,91 @@
+   }
+ };
+
++//===----------------------------------------------------------------------===//
++// ToyToAffine RewritePatterns: MatMul operations
++//===----------------------------------------------------------------------===//
++
++struct MatMulOpLowering : public ConversionPattern {
++  MatMulOpLowering(MLIRContext *ctx)
++      : ConversionPattern(toy::MatMulOp::getOperationName(), 1, ctx) {}
++
++  LogicalResult
++  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
++                  ConversionPatternRewriter &rewriter) const final {
++    auto loc = op->getLoc();
++
++    RankedTensorType lhsType =
++        llvm::dyn_cast<RankedTensorType>(op->getOperand(0).getType());
++    RankedTensorType rhsType =
++        llvm::dyn_cast<RankedTensorType>(op->getOperand(1).getType());
++    auto lhsShape = lhsType.getShape();
++    auto rhsShape = rhsType.getShape();
++
++    auto tensorType =
++        llvm::dyn_cast<RankedTensorType>((*op->result_type_begin()));
++
++    auto elemType = llvm::dyn_cast<FloatType>(tensorType.getElementType());
++
++    // Insert an allocation and deallocation for the result of this operation.
++    auto memRefType = convertTensorToMemRef(tensorType);
++    auto alloc = insertAllocAndDealloc(memRefType, loc, rewriter);
++
++    SmallVector<int64_t, 4> lowerBounds(tensorType.getRank() + 1, /*Value=*/0);
++    SmallVector<int64_t, 4> steps(tensorType.getRank() + 1, /*Value=*/1);
++    SmallVector<int64_t, 4> upperBounds{lhsShape[0], rhsShape[0], rhsShape[1]};
++
++    // add initialization of result tensor.
++    // Create a nest of affine loops to initialize the result tensor to 0.
++    affine::buildAffineLoopNest(
++        rewriter, loc, {0, 0}, tensorType.getShape(), {1, 1},
++        [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
++          // Create a constant float value of 0.0.
++          auto valueToStore = nestedBuilder.create<arith::ConstantFloatOp>(
++              loc, llvm::APFloat(0.0), elemType);
++          // Store the constant value into the allocated memory.
++          nestedBuilder.create<affine::AffineStoreOp>(loc, valueToStore, alloc,
++                                                      ivs);
++        });
++
++    // Create a nest of affine loops for matrix multiplication.
++    affine::buildAffineLoopNest(
++        rewriter, loc, lowerBounds, upperBounds, steps,
++        [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
++          // Extract loop induction variables.
++          Value m = ivs[0];
++          Value k = ivs[1];
++          Value n = ivs[2];
++
++          // Create an adaptor for the remapped operands of the MatMulOp.
++          toy::MatMulOpAdaptor matmulAdaptor(operands);
++
++          // Load elements from the left-hand side and right-hand side matrices.
++          auto loadedLhs = nestedBuilder.create<affine::AffineLoadOp>(
++              loc, matmulAdaptor.getLhs(), ValueRange{m, k});
++          auto loadedRhs = nestedBuilder.create<affine::AffineLoadOp>(
++              loc, matmulAdaptor.getRhs(), ValueRange{k, n});
++          // Load elements from the result tensor from initial process above.
++          auto loadedRes = nestedBuilder.create<affine::AffineLoadOp>(
++              loc, alloc, ValueRange{m, n});
++
++          // Perform the multiplication and addition operations.
++          auto mulop =
++              nestedBuilder.create<arith::MulFOp>(loc, loadedLhs, loadedRhs);
++          auto valueToStore =
++              nestedBuilder.create<arith::AddFOp>(loc, loadedRes, mulop);
++
++          // Store the result back into the allocated memory.
++          nestedBuilder.create<affine::AffineStoreOp>(loc, valueToStore, alloc,
++                                                      ValueRange{m, n});
++        });
++
++    // Replace this operation with the generated alloc.
++    rewriter.replaceOp(op, alloc);
++
++    return success();
++  }
++};
++
+ } // namespace
+
+ //===----------------------------------------------------------------------===//
+@@ -365,8 +452,8 @@
+   // the set of patterns that will lower the Toy operations.
+   RewritePatternSet patterns(&getContext());
+   patterns.add<AddOpLowering, ConstantOpLowering, FuncOpLowering, MulOpLowering,
+-               PrintOpLowering, ReturnOpLowering, TransposeOpLowering>(
+-      &getContext());
++               PrintOpLowering, ReturnOpLowering, TransposeOpLowering,
++               MatMulOpLowering>(&getContext());
+
+   // With the target and rewrite patterns defined, we can now attempt the
+   // conversion. The conversion will signal failure if any of our `illegal`
+diff -urN Ch7/mlir/MLIRGen.cpp Ch8/mlir/MLIRGen.cpp
+--- Ch7/mlir/MLIRGen.cpp	2024-09-22 10:55:44.714339101 +0000
++++ Ch8/mlir/MLIRGen.cpp	2024-10-01 13:51:23.564422131 +0000
+@@ -525,6 +525,14 @@
+       return builder.create<TransposeOp>(location, operands[0]);
+     }
+
++    if (callee == "matmul") {
++      if (call.getArgs().size() != 2) {
++        emitError(location, "MLIR codegen encountered an error: toy.matmul "
++                            "expected 2 arguments");
++      }
++      return builder.create<MatMulOp>(location, operands[0], operands[1]);
++    }
++
+     // Otherwise this is a call to a user-defined function. Calls to
+     // user-defined functions are mapped to a custom call that takes the callee
+     // name as an attribute.

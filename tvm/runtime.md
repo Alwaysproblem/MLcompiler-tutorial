@@ -46,7 +46,7 @@ python: tvm.graph_executor.create
   -> call the `exec->Init`
     -> call the `this->Load(&reader)` # This is the `Load` function.
     -> call `GraphExecutor::SetupStorage()`
-      -> calculate the tensor space and create a storage list and allocate the memory. 
+      -> calculate the tensor space and create a storage list and allocate the memory.
     -> call `GraphExecutor::SetupOpExecs()`
       -> create the input and output tensor list and create the `CreateTVMOp` list.
       -> `CreateTVMOp@src/runtime/graph_executor/graph_executor.cc:603`

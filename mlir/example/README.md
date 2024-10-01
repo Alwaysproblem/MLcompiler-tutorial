@@ -934,7 +934,7 @@ $ ./build/Ch7/mlir-example-ch7 Ch7/struct-codegen.toy -emit=jit
 - Ch8
 
 ```bash
-$ ./vscode_build/Ch8/mlir-example-ch8 Ch8/matmul.toy.mlir -emit=mlir
+$ ./build/Ch8/mlir-example-ch8 Ch8/matmul.toy.mlir -emit=mlir
 # module {
 #   toy.func private @matmul_transpose(%arg0: tensor<*xf64>, %arg1: tensor<*xf64>) -> tensor<*xf64> {
 #     %0 = toy.transpose(%arg0 : tensor<*xf64>) to tensor<*xf64>
@@ -952,6 +952,12 @@ $ ./vscode_build/Ch8/mlir-example-ch8 Ch8/matmul.toy.mlir -emit=mlir
 #     toy.return
 #   }
 # }
+```
+
+```bash
+$ ./build/Ch8/mlir-example-ch8 Ch8/matmul.toy -emit=jit
+# 14.000000 32.000000
+# 32.000000 77.000000
 ```
 
 - transform Ch2

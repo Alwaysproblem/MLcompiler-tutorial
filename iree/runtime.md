@@ -847,7 +847,7 @@ regs_i32[1] = 0
 ```
 
 After run the code unfold with macro:
-  
+
 ```cpp
 // pc = 5
 DISPATCH_OP(CORE, ConstI32, {
