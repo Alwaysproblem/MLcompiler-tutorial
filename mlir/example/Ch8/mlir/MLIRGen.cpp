@@ -525,6 +525,14 @@ private:
       return builder.create<TransposeOp>(location, operands[0]);
     }
 
+    if (callee == "matmul") {
+      if (call.getArgs().size() != 2) {
+        emitError(location, "MLIR codegen encountered an error: toy.matmul "
+                            "expected 2 arguments");
+      }
+      return builder.create<MatMulOp>(location, operands[0], operands[1]);
+    }
+
     // Otherwise this is a call to a user-defined function. Calls to
     // user-defined functions are mapped to a custom call that takes the callee
     // name as an attribute.
