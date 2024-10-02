@@ -18,6 +18,7 @@
 #include <mlir/Transforms/Passes.h>
 
 #include "passes/Pow2.h"
+#include "llvm/Support/Debug.h"
 
 #include <memory>
 #include <numeric>
@@ -169,22 +170,23 @@ void StaticOpCounter::runOnOperation() {
     myAnalysis.add(&op);
   }
 
-  llvm::outs() << "================================================="
-               << "\n";
-  llvm::outs() << "MLIR-PASS-TUTOR: static analysis results\n";
-  llvm::outs() << "=================================================\n";
   const char *str1 = "NAME";
   const char *str2 = "#N DIRECT CALLS";
-  llvm::outs() << llvm::format("%-20s %-10s\n", str1, str2);
-  llvm::outs() << "-------------------------------------------------"
+
+  llvm::dbgs() << "================================================="
+               << "\n";
+  llvm::dbgs() << "MLIR-PASS-TUTOR: static analysis results\n";
+  llvm::dbgs() << "=================================================\n";
+  llvm::dbgs() << llvm::format("%-20s %-10s\n", str1, str2);
+  llvm::dbgs() << "-------------------------------------------------"
                << "\n";
   for (auto &CallCount : myAnalysis.getOpCount()) {
-    llvm::outs() << llvm::format("%-20s %-10lu\n",
+    llvm::dbgs() << llvm::format("%-20s %-10lu\n",
                                  CallCount.first().str().c_str(),
                                  CallCount.getValue());
   }
 
-  llvm::outs() << "-------------------------------------------------"
+  llvm::dbgs() << "-------------------------------------------------"
                << "\n\n";
 }
 
