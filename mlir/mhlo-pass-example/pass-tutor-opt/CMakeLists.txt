@@ -9,6 +9,9 @@ add_executable(pass-tutor-opt pass-tutor-opt.cpp
 add_dependencies(pass-tutor-opt Pow2IncGen Pow2PdllIncGen Pow2PassIncGen)
 
 get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
+get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
+get_property(extension_libs GLOBAL PROPERTY MLIR_EXTENSION_LIBS)
 
-target_link_libraries(pass-tutor-opt PRIVATE ${dialect_libs} MLIRIR
-                                             MLIRMlirOptMain MhloDialect)
+target_link_libraries(
+  pass-tutor-opt PRIVATE ${dialect_libs} ${conversion_libs} ${extension_libs}
+                         MLIRIR MLIRMlirOptMain MhloDialect)

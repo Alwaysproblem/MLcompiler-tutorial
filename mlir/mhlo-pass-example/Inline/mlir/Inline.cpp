@@ -15,6 +15,7 @@
 #include <mlir/Transforms/GreedyPatternRewriteDriver.h>
 #include <mlir/Transforms/Passes.h>
 
+#include "mlir/IR/ValueRange.h"
 #include "passes/Inline.h"
 
 #include <memory>
@@ -33,20 +34,38 @@ void RegionOfFunc(mlir::PatternRewriter &rewriter, mlir::Value callee,
   mlir::ModuleOp module_op = llvm::dyn_cast<mlir::ModuleOp>(
       callee.getParentRegion()->getParentOp()->getParentOp());
   auto calleeFuncOp = module_op.lookupSymbol<func::FuncOp>(callee_name);
-  mlir::Region &calleeFuncOpRegion = calleeFuncOp.getBody();
-  mlir::Region &main_region = *callee.getParentRegion();
+  if (calleeFuncOp.getBlocks().size() != 1) {
+    llvm::errs() << "calleeFuncOp.getBlocks().size() != 1\n";
+    return;
+  }
+  auto calleeBlock = &calleeFuncOp.getBlocks().front();
+  auto mainBlock = callee.getParentBlock();
+  auto calleeTerminator = calleeBlock->getTerminator();
+  mlir::Value term_oper = calleeTerminator->getOperands().front();
 
-  rewriter.inlineRegionBefore(calleeFuncOpRegion, main_region,
-                              main_region.end());
+  ValueRange args = calleeOp.getOperands();
 
-  mlir::Block *inlineBlock = callee.getParentBlock();
-  mlir::Block *interm_b = &*std::next(inlineBlock->getIterator());
-  mlir::Operation *term = interm_b->getTerminator();
-  mlir::Value term_oper = term->getOperands().front();
-  rewriter.eraseOp(interm_b->getTerminator());
-  rewriter.mergeBlockBefore(interm_b, calleeOp, input);
+  rewriter.inlineBlockBefore(calleeBlock, calleeOp, args);
   calleeOp.getResults().front().replaceAllUsesWith(term_oper);
+
+  rewriter.eraseOp(calleeTerminator);
   rewriter.eraseOp(calleeFuncOp);
+
+  // mlir::Region &calleeFuncOpRegion = calleeFuncOp.getBody();
+  // mlir::Region &main_region = *callee.getParentRegion();
+
+  // rewriter.inlineRegionBefore(calleeFuncOpRegion, main_region,
+  //                             main_region.end());
+
+  // mlir::Block *inlineBlock = callee.getParentBlock();
+  // mlir::Block *interm_b = &*std::next(inlineBlock->getIterator());
+  // mlir::Operation *term = interm_b->getTerminator();
+  // mlir::Value term_oper = term->getOperands().front();
+  // rewriter.eraseOp(interm_b->getTerminator());
+  // rewriter.inlineBlockBefore(interm_b, calleeOp);
+  // // rewriter.mergeBlockBefore(interm_b, calleeOp, input);
+  // calleeOp.getResults().front().replaceAllUsesWith(term_oper);
+  // rewriter.eraseOp(calleeFuncOp);
 }
 
 // The second way to do Inline action

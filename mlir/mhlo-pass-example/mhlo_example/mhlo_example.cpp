@@ -2,6 +2,7 @@
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_ostream.h>
 #include <mhlo/IR/hlo_ops.h>
+#include <mlir/Dialect/Func/Extensions/AllExtensions.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/IR/MLIRContext.h>
 #include <mlir/Parser/Parser.h>
@@ -54,8 +55,14 @@ int main(int argc, char *argv[]) {
 
   cl::ParseCommandLineOptions(argc, argv, "toy compiler\n");
 
-  mlir::MLIRContext context;
-  context.loadDialect<mlir::mhlo::MhloDialect, mlir::func::FuncDialect>();
+  mlir::DialectRegistry registry;
+  mlir::func::registerAllExtensions(registry);
+
+  mlir::MLIRContext context(registry);
+
+  // Load our Dialect in this MLIR Context.
+  context.getOrLoadDialect<mlir::mhlo::MhloDialect>();
+  context.getOrLoadDialect<mlir::func::FuncDialect>();
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
   llvm::SourceMgr sourceMgr;
@@ -73,7 +80,8 @@ int main(int argc, char *argv[]) {
   if (enableOpt) {
     mlir::PassManager pm(&context);
     // Apply any generic pass manager command line options and run the pipeline.
-    applyPassManagerCLOptions(pm);
+    if (mlir::failed(mlir::applyPassManagerCLOptions(pm)))
+      return 4;
 
     // Add a run of the canonicalizer to optimize the mlir module.
     pm.addNestedPass<mlir::func::FuncOp>(mlir::createCanonicalizerPass());
