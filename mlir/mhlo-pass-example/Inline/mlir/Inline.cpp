@@ -41,31 +41,20 @@ void RegionOfFunc(mlir::PatternRewriter &rewriter, mlir::Value callee,
   auto calleeBlock = &calleeFuncOp.getBlocks().front();
   auto mainBlock = callee.getParentBlock();
   auto calleeTerminator = calleeBlock->getTerminator();
+  if (calleeTerminator->getOperands().size() != 1) {
+    llvm::errs() << "calleeTerminator->getOperands().size() != 1\n";
+    return;
+  }
   mlir::Value term_oper = calleeTerminator->getOperands().front();
-
+  // get the callee operands
   ValueRange args = calleeOp.getOperands();
-
+  // inline the callee block before the callee operation
   rewriter.inlineBlockBefore(calleeBlock, calleeOp, args);
+  // replace the callee result with the callee terminator
   calleeOp.getResults().front().replaceAllUsesWith(term_oper);
-
+  // erase the callee terminator and the callee function
   rewriter.eraseOp(calleeTerminator);
   rewriter.eraseOp(calleeFuncOp);
-
-  // mlir::Region &calleeFuncOpRegion = calleeFuncOp.getBody();
-  // mlir::Region &main_region = *callee.getParentRegion();
-
-  // rewriter.inlineRegionBefore(calleeFuncOpRegion, main_region,
-  //                             main_region.end());
-
-  // mlir::Block *inlineBlock = callee.getParentBlock();
-  // mlir::Block *interm_b = &*std::next(inlineBlock->getIterator());
-  // mlir::Operation *term = interm_b->getTerminator();
-  // mlir::Value term_oper = term->getOperands().front();
-  // rewriter.eraseOp(interm_b->getTerminator());
-  // rewriter.inlineBlockBefore(interm_b, calleeOp);
-  // // rewriter.mergeBlockBefore(interm_b, calleeOp, input);
-  // calleeOp.getResults().front().replaceAllUsesWith(term_oper);
-  // rewriter.eraseOp(calleeFuncOp);
 }
 
 // The second way to do Inline action
