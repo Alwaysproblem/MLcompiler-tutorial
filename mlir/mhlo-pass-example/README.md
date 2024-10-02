@@ -328,10 +328,16 @@ def Pow2Pass : Pass<"pow-2", "func::FuncOp"> {
 
   // Specify any options.
   let options = [
+    Option</*C++ variable name=*/"Pow2Pass", /*argument*/"pow2-opt",
+           /*type*/"bool", /*default=*/"false",
+           /*description*/"Enable Pow2 Optimization">,
   ];
 
   // Specify any statistics.
   let statistics = [
+    // Statistic</*C++ variable name=*/"statistic",
+    //           /*display name*/"example-statistic",
+    //           /*description*/"An example statistic">
   ];
 }
 ```
@@ -409,4 +415,46 @@ struct SubstitutePow2PdllGenPass
   };
 };
 } // namespace
+```
+
+And then, you can also find the `registerPasses` in the `Pow2Pass.inc` file. This can be used to register the pass to the MLIR PassManager when you want to register the pass into the `xxx-opt` binary.
+
+```cpp
+//===----------------------------------------------------------------------===//
+// Pow2Pass Registration
+//===----------------------------------------------------------------------===//
+
+inline void registerPow2Pass() {
+  ::mlir::registerPass([]() -> std::unique_ptr<::mlir::Pass> {
+    return mhlo::createSubstitutePow2Pass();
+  });
+}
+
+// Old registration code, kept for temporary backwards compatibility.
+inline void registerPow2PassPass() {
+  ::mlir::registerPass([]() -> std::unique_ptr<::mlir::Pass> {
+    return mhlo::createSubstitutePow2Pass();
+  });
+}
+
+//===----------------------------------------------------------------------===//
+//  Registration
+//===----------------------------------------------------------------------===//
+
+inline void registerPasses() {
+  registerPow2Pass();
+}
+```
+
+You can find the example in the `pass-tutor-opt/pass-tutor-opt.cpp` file.
+
+```cpp
+  // Register all "core" dialects
+  ...
+  mlir::mhlo::registerPasses();
+  ...
+  // Delegate to the MLIR utility for parsing and pass management.
+  return mlir::MlirOptMain(argc, argv, "pass-tutor-opt", registry).succeeded()
+             ? EXIT_SUCCESS
+             : EXIT_FAILURE;
 ```
