@@ -16,7 +16,7 @@ from lit.llvm.subst import FindTool
 # Configuration file for the 'lit' test runner.
 
 # name: The name of this test suite.
-config.name = 'MLHLO_PASS_TUTOR'
+config.name = 'MLIR_PASS_TUTOR'
 
 config.test_format = lit.formats.ShTest(not llvm_config.use_lit_shell)
 
@@ -53,6 +53,7 @@ tool_root_dir = [
     'Outline',
     'Pow2',
     'Tanh',
+    "pass-tutor-opt"
 ]
 
 tool_dirs = [ os.path.join(config.obj_root, i) for i in tool_root_dir ] + [config.llvm_tools_dir]
@@ -64,10 +65,7 @@ tools = [
     "outline",
     "pow2",
     "tanh",
+    "pass-tutor-opt"
 ]
 
 llvm_config.add_tool_substitutions(tools, tool_dirs)
-
-llvm_config.with_environment('PYTHONPATH', [
-    os.path.join(config.mlir_obj_dir, 'python_packages', 'standalone'),
-], append_path=True)

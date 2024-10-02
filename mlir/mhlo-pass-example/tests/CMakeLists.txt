@@ -11,7 +11,8 @@ set(MHLO_PASS_TUTOR_DEPENDS
     explog
     inline
     pow2
-    outline)
+    outline
+    pass-tutor-opt)
 
 add_lit_testsuite(
   check-mhlo-pass-tutor "Running the standalone regression tests"
