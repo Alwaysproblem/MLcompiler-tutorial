@@ -5,9 +5,10 @@
 - [x] simplify exp and log pass
 - [x] Inline pass
 - [x] outline pass
+- [x] analysis pass
+- [x] action
 - [ ] loopFusion pass
 - [ ] associative pass
-- [ ] analysis pass
 - [ ] multithread substitution pass
 - [ ] multithread multi-ModuleOp pass
 - [ ] partial lowering pass

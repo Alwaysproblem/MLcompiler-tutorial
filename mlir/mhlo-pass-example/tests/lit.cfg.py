@@ -53,7 +53,7 @@ tool_root_dir = [
     'Outline',
     'Pow2',
     'Tanh',
-    "pass-tutor-opt"
+    "PassTutor"
 ]
 
 tool_dirs = [ os.path.join(config.obj_root, i) for i in tool_root_dir ] + [config.llvm_tools_dir]
