@@ -86,6 +86,8 @@ int main(int argc, char *argv[]) {
   llvm::dbgs() << "Input mhlo mlir:" << '\n';
   module->dump();
 
+  unsigned domInfoCount = 0;
+
   if (enableOpt) {
     mlir::PassManager pm(&context);
     // Apply any generic pass manager command line options and run the pipeline.
@@ -97,6 +99,8 @@ int main(int argc, char *argv[]) {
     pm.addNestedPass<mlir::func::FuncOp>(
         mlir::mhlo::createSubstitutePow2Pass());
     pm.addNestedPass<mlir::func::FuncOp>(mlir::mhlo::createStaticOpCounter());
+    pm.addInstrumentation(
+        mlir::mhlo::createDominanceCounterInstrumentation(domInfoCount));
 
     if (mlir::failed(pm.run(*module)))
       return 4;
@@ -107,6 +111,9 @@ int main(int argc, char *argv[]) {
   llvm::dbgs()
       << "------------------------------------------------------------\n";
   module->print(llvm::outs());
+  llvm::dbgs()
+      << "------------------------------------------------------------\n";
+  llvm::dbgs() << "DominanceInfo count: " << domInfoCount << "\n";
 
   return 0;
 }

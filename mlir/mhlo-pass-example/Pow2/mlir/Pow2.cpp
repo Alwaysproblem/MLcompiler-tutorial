@@ -6,6 +6,7 @@
 #include <mlir/Pass/Pass.h>
 #include <mlir/Transforms/DialectConversion.h>
 
+#include "mlir/IR/Dominance.h"
 #include <llvm/Support/Format.h>
 #include <llvm/Support/raw_ostream.h>
 #include <mlir/Analysis/CallGraph.h>
@@ -152,7 +153,7 @@ struct SubstitutePow2PdllGenPass
             signalPassFailure();
         },
         /*irUnits=*/irUnits, /*iteration=*/10);
-        // Above, we pass the irUnits and iteration to the EchoAction.
+    // Above, we pass the irUnits and iteration to the EchoAction.
   };
 };
 } // namespace
@@ -171,7 +172,7 @@ std::unique_ptr<mlir::Pass> mhlo::createSubstitutePow2Pass() {
 struct StaticOpCounterAnalysis {
   llvm::StringMap<int> opCount;
   // Compute this analysis with the provided operation.
-  StaticOpCounterAnalysis(Operation *op) : opCount({}) {};
+  StaticOpCounterAnalysis(Operation *op) : opCount({}){};
 
   void add(Operation *op) {
     auto opName = op->getName().getStringRef();
@@ -241,4 +242,24 @@ std::unique_ptr<mlir::Pass> mhlo::createStaticOpCounter() {
   // return std::make_unique<SubstitutePow2PdllPass>();
   // 3. use tddr to generate pass declaration.
   return std::make_unique<StaticOpCounter>();
+}
+
+struct DominanceCounterInstrumentation : public PassInstrumentation {
+  /// The cumulative count of how many times dominance has been calculated.
+  unsigned &count;
+
+  DominanceCounterInstrumentation(unsigned &count) : count(count) {}
+  void runBeforePass(Pass *pass, Operation *op) override {
+    llvm::dbgs() << "Before pass: " << pass->getName() << "\n";
+    op->dump();
+  }
+  void runAfterPass(Pass *pass, Operation *op) override {
+    llvm::dbgs() << "After pass: " << pass->getName() << "\n";
+    op->dump();
+  }
+};
+
+std::unique_ptr<mlir::PassInstrumentation>
+mhlo::createDominanceCounterInstrumentation(unsigned &count) {
+  return std::make_unique<DominanceCounterInstrumentation>(count);
 }
