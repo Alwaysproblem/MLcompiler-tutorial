@@ -5,6 +5,7 @@
 #include <mlir/IR/PatternMatch.h>
 #include <mlir/Pass/Pass.h>
 #include <mlir/Transforms/DialectConversion.h>
+#include <mlir/Dialect/PDL/IR/PDL.h>
 
 #include <llvm/Support/Format.h>
 #include <llvm/Support/raw_ostream.h>
@@ -129,7 +130,7 @@ namespace {
 namespace {
 struct SubstitutePow2PdllGenPass
     : impl::Pow2PassBase<SubstitutePow2PdllGenPass> {
-  using Pow2PassBase::Pow2PassBase;
+  using Pow2PassBase::Base;
 
   void runOnOperation() final {
     auto op = getOperation();

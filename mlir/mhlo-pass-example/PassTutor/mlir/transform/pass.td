@@ -11,6 +11,10 @@ def Pow2Pass : Pass<"pow-2", "func::FuncOp"> {
   // constructor and the registration methods live in the same namespace.
   let constructor = "mhlo::createSubstitutePow2Pass()";
 
+  let dependentDialects = ["mlir::mhlo::MhloDialect",
+                           "mlir::func::FuncDialect",
+                           "mlir::pdl::PDLDialect"];
+
   // Specify any options.
   let options = [
     Option</*C++ variable name=*/"Pow2Pass", /*argument*/"pow2-opt",
