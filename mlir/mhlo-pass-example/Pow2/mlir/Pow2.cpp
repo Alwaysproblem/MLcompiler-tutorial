@@ -89,6 +89,15 @@ namespace {
 struct SubstitutePow2Pass
     : public PassWrapper<SubstitutePow2Pass, OperationPass<func::FuncOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(SubstitutePow2Pass)
+  // Here we can add the statistic (the statistic is only works on debug mode)
+  // Since the statistic has the atomic value, we can't use the default copy
+  // constructor and assignment operator.
+  // SubstitutePow2Pass() = default;
+  // SubstitutePow2Pass(const SubstitutePow2Pass &other) {
+  //   this->statistic = other.statistic.getValue();
+  // };
+  // mlir::Pass::Statistic statistic{this, "example-statistic", "An example
+  // statistic"};
 
   void runOnOperation() final;
 };
@@ -100,6 +109,8 @@ void SubstitutePow2Pass::runOnOperation() {
   patterns.add<Pow2OptPattern>(&getContext());
   if (failed(applyPatternsAndFoldGreedily(op, std::move(patterns))))
     signalPassFailure();
+  // Here we can add the statistic (the statistic is only works on debug mode)
+  // statistic++;
 }
 
 namespace {

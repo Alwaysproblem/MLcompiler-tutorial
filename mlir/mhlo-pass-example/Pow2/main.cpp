@@ -94,6 +94,9 @@ int main(int argc, char *argv[]) {
     if (mlir::failed(mlir::applyPassManagerCLOptions(pm)))
       return 4;
 
+    // Enable the statistics (only works on debug mode)
+    // pm.enableStatistics();
+
     // Add a run of the canonicalizer to optimize the mlir module.
     // pm.addNestedPass<mlir::func::FuncOp>(mlir::createCanonicalizerPass());
     pm.addNestedPass<mlir::func::FuncOp>(

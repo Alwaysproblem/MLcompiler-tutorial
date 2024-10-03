@@ -20,8 +20,8 @@ def Pow2Pass : Pass<"pow-2", "func::FuncOp"> {
 
   // Specify any statistics.
   let statistics = [
-    // Statistic</*C++ variable name=*/"statistic",
-    //           /*display name*/"example-statistic",
-    //           /*description*/"An example statistic">
+    Statistic</*C++ variable name=*/"statistic",
+              /*display name*/"example-statistic",
+              /*description*/"An example statistic">
   ];
 }
