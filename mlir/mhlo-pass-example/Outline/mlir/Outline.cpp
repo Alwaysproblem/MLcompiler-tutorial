@@ -28,6 +28,11 @@ mlir::Operation *createFunction(mlir::PatternRewriter &rewriter,
                                 mlir::Value root, mlir::Value input) {
   mlir::ModuleOp module_op = llvm::dyn_cast<mlir::ModuleOp>(
       input.getParentRegion()->getParentOp()->getParentOp());
+  if (module_op){
+    func::FuncOp callable = module_op.lookupSymbol<func::FuncOp>("tanh_function");
+    if (callable)
+      return callable;
+  }
   mlir::Block *module_block = module_op.getBody();
   mlir::OpBuilder builder(input.getContext());
   builder.setInsertionPointToStart(module_block);

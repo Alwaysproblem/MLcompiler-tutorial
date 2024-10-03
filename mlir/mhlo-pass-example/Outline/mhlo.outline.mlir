@@ -9,6 +9,16 @@ module {
     %6 = mhlo.divide %4, %5 : tensor<2x2xf32>
     return %6 : tensor<2x2xf32>
   }
+  func.func @main0(%arg0: tensor<2x2xf32>, %arg1: tensor<2x2xf32>) -> tensor<2x2xf32> {
+    %0 = mhlo.add %arg0, %arg1 : tensor<2x2xf32>
+    %1 = mhlo.exponential %0 : tensor<2x2xf32>
+    %2 = mhlo.negate %0 : tensor<2x2xf32>
+    %3 = mhlo.exponential %2 : tensor<2x2xf32>
+    %4 = mhlo.subtract %1, %3 : tensor<2x2xf32>
+    %5 = mhlo.add %1, %3 : tensor<2x2xf32>
+    %6 = mhlo.divide %4, %5 : tensor<2x2xf32>
+    return %6 : tensor<2x2xf32>
+  }
 }
 
 // after conversion:
