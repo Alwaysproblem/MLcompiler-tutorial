@@ -455,7 +455,7 @@ def TransposeOp : Toy_Op<"transpose",
 //===----------------------------------------------------------------------===//
 
 def MatMulOp : Toy_Op<"matmul",
-    [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
+    [Pure, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>, MemoryEffectsOpInterface]> {
   let summary = "matrix multiplication operation";
   let description = [{
     The "matmul" operation performs Matrix multiplication between two
@@ -463,7 +463,9 @@ def MatMulOp : Toy_Op<"matmul",
   }];
 
   let arguments = (ins F64Tensor:$lhs, F64Tensor:$rhs);
-  let results = (outs F64Tensor);
+  let results = (outs Res<F64Tensor, "",
+                          [MemWrite<DefaultResource>,
+                           MemAlloc<DefaultResource>]>:$output);
 
   let assemblyFormat = [{
     `(` $lhs `:` type($lhs) `,` $rhs `:` type($rhs) `)` attr-dict `to` type(results)
