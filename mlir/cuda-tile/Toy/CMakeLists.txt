@@ -1,9 +1,3 @@
-# This chapter depends on JIT support enabled.
-if(NOT MLIR_ENABLE_EXECUTION_ENGINE)
-  return()
-endif()
-
-
 # For a better template to copy, see examples/standalone
 include_directories(include)
 add_subdirectory(include)
@@ -17,9 +11,10 @@ set(LLVM_LINK_COMPONENTS
 
 set(LLVM_TARGET_DEFINITIONS mlir/ToyCombine.td)
 mlir_tablegen(ToyCombine.inc -gen-rewriters)
-add_public_tablegen_target(ToyCh6CombineIncGen)
+add_public_tablegen_target(ToyCudaCombineIncGen)
 
-add_toy_chapter(toyc-ch6
+add_executable(
+  toy-cuda
   toyc.cpp
   parser/AST.cpp
   mlir/MLIRGen.cpp
@@ -27,17 +22,17 @@ add_toy_chapter(toyc-ch6
   mlir/LowerToAffineLoops.cpp
   mlir/LowerToLLVM.cpp
   mlir/ShapeInferencePass.cpp
-  mlir/ToyCombine.cpp
+  mlir/ToyCombine.cpp)
 
-  DEPENDS
-  ToyCh6ShapeInferenceInterfaceIncGen
-  ToyCh6OpsIncGen
-  ToyCh6CombineIncGen
+add_dependencies(toy-cuda
+  ToyCudaShapeInferenceInterfaceIncGen
+  ToyCudaOpsIncGen
+  ToyCudaCombineIncGen
   )
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/include/)
-target_link_libraries(toyc-ch6
+target_link_libraries(toy-cuda
   PRIVATE
     MLIRAnalysis
     MLIRBuiltinToLLVMIRTranslation
