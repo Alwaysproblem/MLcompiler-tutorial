@@ -438,6 +438,58 @@ llvm::LogicalResult TransposeOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
+// MatMulOp
+//===----------------------------------------------------------------------===//
+
+void MatMulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
+                     mlir::Value lhs, mlir::Value rhs) {
+  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
+  state.addOperands({lhs, rhs});
+}
+
+/// Infer the output shape of the MatMulOp, this is required by the shape
+/// inference interface.
+void MatMulOp::inferShapes() {
+  RankedTensorType lhsType =
+      llvm::dyn_cast<RankedTensorType>(getLhs().getType());
+  RankedTensorType rhsType =
+      llvm::dyn_cast<RankedTensorType>(getRhs().getType());
+  auto lhsShape = lhsType.getShape();
+  auto rhsShape = rhsType.getShape();
+  RankedTensorType res_type = RankedTensorType::get({lhsShape[0], rhsShape[1]},
+                                                    lhsType.getElementType());
+  getResult().setType(res_type);
+}
+
+llvm::LogicalResult MatMulOp::verify() {
+  auto lhsType = llvm::dyn_cast<RankedTensorType>(getLhs().getType());
+  auto rhsType = llvm::dyn_cast<RankedTensorType>(getRhs().getType());
+  auto resultType = llvm::dyn_cast<RankedTensorType>(getType());
+
+  if (!lhsType || !rhsType || !resultType)
+    return mlir::success();
+
+  auto lhsShape = lhsType.getShape();
+  auto rhsShape = rhsType.getShape();
+
+  if (lhsShape.size() != 2 || rhsShape.size() != 2) {
+    return emitOpError() << "expected 2D matrix";
+  }
+
+  if (lhsShape[1] != rhsShape[0]) {
+    return emitOpError() << "expected dimension to match"
+                         << "the shape of lhs is [" << lhsShape[0] << ", "
+                         << lhsShape[1] << "] "
+                         << "the shape of rhs is [" << rhsShape[0] << ", "
+                         << rhsShape[1] << "] "
+                         << "but the dimension " << lhsShape[1]
+                         << "!=" << rhsShape[0] << '\n';
+  }
+
+  return mlir::success();
+}
+
+//===----------------------------------------------------------------------===//
 // TableGen'd op method definitions
 //===----------------------------------------------------------------------===//
 

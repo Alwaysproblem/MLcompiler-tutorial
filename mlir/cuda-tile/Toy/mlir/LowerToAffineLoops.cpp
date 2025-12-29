@@ -15,6 +15,7 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinDialect.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/DialectRegistry.h"
@@ -31,9 +32,11 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Sequence.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/Casting.h"
 #include <algorithm>
 #include <cstdint>
@@ -299,6 +302,94 @@ struct TransposeOpLowering : public OpConversionPattern<toy::TransposeOp> {
   }
 };
 
+//===----------------------------------------------------------------------===//
+// ToyToAffine RewritePatterns: MatMul operations
+//===----------------------------------------------------------------------===//
+
+struct MatMulOpLowering : public ConversionPattern {
+  MatMulOpLowering(MLIRContext *ctx)
+      : ConversionPattern(toy::MatMulOp::getOperationName(), 1, ctx) {}
+
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto loc = op->getLoc();
+
+    RankedTensorType lhsType =
+        llvm::dyn_cast<RankedTensorType>(op->getOperand(0).getType());
+    RankedTensorType rhsType =
+        llvm::dyn_cast<RankedTensorType>(op->getOperand(1).getType());
+    auto lhsShape = lhsType.getShape();
+    auto rhsShape = rhsType.getShape();
+
+    auto tensorType =
+        llvm::dyn_cast<RankedTensorType>((*op->result_type_begin()));
+
+    auto elemType = llvm::dyn_cast<FloatType>(tensorType.getElementType());
+
+    // Insert an allocation and deallocation for the result of this operation.
+    auto memRefType = convertTensorToMemRef(tensorType);
+    auto alloc = insertAllocAndDealloc(memRefType, loc, rewriter);
+
+    SmallVector<int64_t, 4> lowerBounds(tensorType.getRank() + 1, /*Value=*/0);
+    SmallVector<int64_t, 4> steps(tensorType.getRank() + 1, /*Value=*/1);
+    SmallVector<int64_t, 4> upperBounds{lhsShape[0], rhsShape[0], rhsShape[1]};
+
+    // add initialization of result tensor.
+    // Create a nest of affine loops to initialize the result tensor to 0.
+    affine::buildAffineLoopNest(
+        rewriter, loc, {0, 0}, tensorType.getShape(), {1, 1},
+        [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
+          // Create a constant float value of 0.0.
+          auto valueToStore = arith::ConstantFloatOp::create(
+              nestedBuilder, loc, elemType,
+              llvm::APFloat::getZero(elemType.getFloatSemantics()));
+
+          // Store the constant value into the allocated memory.
+          affine::AffineStoreOp::create(nestedBuilder, loc, valueToStore, alloc,
+                                        ivs);
+        });
+
+    // Create a nest of affine loops for matrix multiplication.
+    affine::buildAffineLoopNest(
+        rewriter, loc, lowerBounds, upperBounds, steps,
+        [&](OpBuilder &nestedBuilder, Location loc, ValueRange ivs) {
+          // Extract loop induction variables.
+          Value m = ivs[0];
+          Value k = ivs[1];
+          Value n = ivs[2];
+
+          // Create an adaptor for the remapped operands of the MatMulOp.
+          toy::MatMulOpAdaptor matmulAdaptor(operands);
+
+          // Load elements from the left-hand side and right-hand side matrices.
+          auto loadedLhs = affine::AffineLoadOp::create(
+              nestedBuilder, loc, matmulAdaptor.getLhs(), ValueRange{m, k});
+
+          auto loadedRhs = affine::AffineLoadOp::create(
+              nestedBuilder, loc, matmulAdaptor.getRhs(), ValueRange{k, n});
+          // Load elements from the result tensor from initial process above.
+          auto loadedRes = affine::AffineLoadOp::create(
+              nestedBuilder, loc, alloc, ValueRange{m, n});
+
+          // Perform the multiplication and addition operations.
+          auto mulop =
+              arith::MulFOp::create(nestedBuilder, loc, loadedLhs, loadedRhs);
+          auto valueToStore =
+              arith::AddFOp::create(nestedBuilder, loc, loadedRes, mulop);
+
+          // Store the result back into the allocated memory.
+          affine::AffineStoreOp::create(nestedBuilder, loc, valueToStore, alloc,
+                                        ValueRange{m, n});
+        });
+
+    // Replace this operation with the generated alloc.
+    rewriter.replaceOp(op, alloc);
+
+    return success();
+  }
+};
+
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -350,8 +441,8 @@ void ToyToAffineLoweringPass::runOnOperation() {
   // the set of patterns that will lower the Toy operations.
   RewritePatternSet patterns(&getContext());
   patterns.add<AddOpLowering, ConstantOpLowering, FuncOpLowering, MulOpLowering,
-               PrintOpLowering, ReturnOpLowering, TransposeOpLowering>(
-      &getContext());
+               PrintOpLowering, ReturnOpLowering, TransposeOpLowering,
+               MatMulOpLowering>(&getContext());
 
   // With the target and rewrite patterns defined, we can now attempt the
   // conversion. The conversion will signal failure if any of our `illegal`
