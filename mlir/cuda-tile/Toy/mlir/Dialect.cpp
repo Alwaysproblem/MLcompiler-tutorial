@@ -169,8 +169,8 @@ static void printBinaryOp(mlir::OpAsmPrinter &printer, mlir::Operation *op) {
 /// The builder is passed as an argument, so is the state that this method is
 /// expected to fill in order to build the operation.
 void ConstantOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                       double value) {
-  auto dataType = RankedTensorType::get({}, builder.getF64Type());
+                       float value) {
+  auto dataType = RankedTensorType::get({}, builder.getF32Type());
   auto dataAttribute = DenseElementsAttr::get(dataType, value);
   ConstantOp::build(builder, state, dataType, dataAttribute);
 }
@@ -238,7 +238,7 @@ llvm::LogicalResult ConstantOp::verify() {
 
 void AddOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                   mlir::Value lhs, mlir::Value rhs) {
-  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
+  state.addTypes(UnrankedTensorType::get(builder.getF32Type()));
   state.addOperands({lhs, rhs});
 }
 
@@ -319,7 +319,7 @@ void FuncOp::print(mlir::OpAsmPrinter &p) {
 void GenericCallOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                           StringRef callee, ArrayRef<mlir::Value> arguments) {
   // Generic call always returns an unranked Tensor initially.
-  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
+  state.addTypes(UnrankedTensorType::get(builder.getF32Type()));
   state.addOperands(arguments);
   state.addAttribute("callee",
                      mlir::SymbolRefAttr::get(builder.getContext(), callee));
@@ -353,7 +353,7 @@ MutableOperandRange GenericCallOp::getArgOperandsMutable() {
 
 void MulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                   mlir::Value lhs, mlir::Value rhs) {
-  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
+  state.addTypes(UnrankedTensorType::get(builder.getF32Type()));
   state.addOperands({lhs, rhs});
 }
 
@@ -412,7 +412,7 @@ llvm::LogicalResult ReturnOp::verify() {
 
 void TransposeOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                         mlir::Value value) {
-  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
+  state.addTypes(UnrankedTensorType::get(builder.getF32Type()));
   state.addOperands(value);
 }
 
@@ -443,7 +443,7 @@ llvm::LogicalResult TransposeOp::verify() {
 
 void MatMulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                      mlir::Value lhs, mlir::Value rhs) {
-  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
+  state.addTypes(UnrankedTensorType::get(builder.getF32Type()));
   state.addOperands({lhs, rhs});
 }
 

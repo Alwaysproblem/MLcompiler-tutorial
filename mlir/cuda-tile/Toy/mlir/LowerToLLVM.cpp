@@ -109,8 +109,18 @@ public:
     // Generate a call to printf for the current element of the loop.
     auto elementLoad =
         memref::LoadOp::create(rewriter, loc, op.getInput(), loopIvs);
+
+    // Varargs promotion: float -> double
+    Value arg = elementLoad;
+    Type t = elementLoad.getType();
+    if (t.isF32()) {
+      arg = arith::ExtFOp::create(rewriter, loc, rewriter.getF64Type(), arg);
+    } else if (!t.isF64()) {
+      return rewriter.notifyMatchFailure(op, "toy.print only supports f32/f64");
+    }
+
     LLVM::CallOp::create(rewriter, loc, getPrintfType(context), printfRef,
-                         ArrayRef<Value>({formatSpecifierCst, elementLoad}));
+                         ArrayRef<Value>({formatSpecifierCst, arg}));
 
     // Notify the rewriter that this operation has been removed.
     rewriter.eraseOp(op);

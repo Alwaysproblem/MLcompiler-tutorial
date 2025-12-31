@@ -258,22 +258,22 @@ private:
   /// Example, the source level statement:
   ///   var a<2, 3> = [[1, 2, 3], [4, 5, 6]];
   /// will be converted to:
-  ///   %0 = "toy.constant"() {value: dense<tensor<2x3xf64>,
+  ///   %0 = "toy.constant"() {value: dense<tensor<2x3xf32>,
   ///     [[1.000000e+00, 2.000000e+00, 3.000000e+00],
-  ///      [4.000000e+00, 5.000000e+00, 6.000000e+00]]>} : () -> tensor<2x3xf64>
+  ///      [4.000000e+00, 5.000000e+00, 6.000000e+00]]>} : () -> tensor<2x3xf32>
   ///
   mlir::Value mlirGen(LiteralExprAST &lit) {
     auto type = getType(lit.getDims());
 
     // The attribute is a vector with a floating point value per element
     // (number) in the array, see `collectData()` below for more details.
-    std::vector<double> data;
+    std::vector<float> data;
     data.reserve(llvm::product_of(lit.getDims()));
     collectData(lit, data);
 
     // The type of this attribute is tensor of 64-bit floating-point with the
     // shape of the literal.
-    mlir::Type elementType = builder.getF64Type();
+    mlir::Type elementType = builder.getF32Type();
     auto dataType = mlir::RankedTensorType::get(lit.getDims(), elementType);
 
     // This is the actual attribute that holds the list of values for this
@@ -292,9 +292,9 @@ private:
   ///  [[1, 2], [3, 4]]
   /// we will generate:
   ///  [ 1, 2, 3, 4 ]
-  /// Individual numbers are represented as doubles.
+  /// Individual numbers are represented as floats.
   /// Attributes are the way MLIR attaches constant to operations.
-  void collectData(ExprAST &expr, std::vector<double> &data) {
+  void collectData(ExprAST &expr, std::vector<float> &data) {
     if (auto *lit = dyn_cast<LiteralExprAST>(&expr)) {
       for (auto &value : lit->getValues())
         collectData(*value, data);
@@ -444,10 +444,10 @@ private:
   mlir::Type getType(ArrayRef<int64_t> shape) {
     // If the shape is empty, then this type is unranked.
     if (shape.empty())
-      return mlir::UnrankedTensorType::get(builder.getF64Type());
+      return mlir::UnrankedTensorType::get(builder.getF32Type());
 
     // Otherwise, we use the given shape.
-    return mlir::RankedTensorType::get(shape, builder.getF64Type());
+    return mlir::RankedTensorType::get(shape, builder.getF32Type());
   }
 
   /// Build an MLIR type from a Toy AST variable type (forward to the generic
