@@ -26,9 +26,9 @@ fi
 cd ${WORKSPACEROOT}
 
 # LLVM source
-LLVM_SRC_DIR="${1:-third_party/llvm-project}"
+LLVM_SRC_DIR="${1:-${WORKSPACEROOT}/third_party/llvm-project}"
 build_dir="${LLVM_SRC_DIR}/build"
-install_dir="${2:-third_party}"/llvm
+install_dir="${2:-${WORKSPACEROOT}/third_party/llvm}"
 
 if ! [ -f "$LLVM_SRC_DIR/llvm/CMakeLists.txt" ]; then
   echo "Expected the path to LLVM to be set correctly (got '$LLVM_SRC_DIR'): can't find CMakeLists.txt"
@@ -48,13 +48,15 @@ mkdir -p ${install_dir}
 echo "Beginning build (commands will echo)"
 set -x
 
+cd $LLVM_SRC_DIR
+
 cmake -GNinja \
-  "-H$LLVM_SRC_DIR/llvm" \
-  "-B$build_dir" \
+  "-H llvm" \
+  "-B $build_dir" \
   -DCMAKE_BUILD_TYPE=Debug \
   -DLLVM_ENABLE_PROJECTS=mlir \
   -DLLVM_TARGETS_TO_BUILD="X86;NVPTX;AMDGPU" \
-  -DLLVM_ENABLE_LLD=ON \
+  -DLLVM_ENABLE_LLD=OFF \
   -DLLVM_ENABLE_BACKTRACES=OFF \
   -DLLVM_INCLUDE_UTILS=ON \
   -DCMAKE_INSTALL_PREFIX=${install_dir} \
@@ -62,6 +64,7 @@ cmake -GNinja \
   -DLLVM_BUILD_UTILS=ON \
   -DLLVM_INCLUDE_TOOLS=ON \
   -DLLVM_BUILD_TOOLS=ON \
+  -DMLIR_ENABLE_CUDA_RUNNER=ON \
   -DLLVM_BUILD_LLVM_DYLIB=ON \
   -DCMAKE_CXX_COMPILER=clang++ \
   -DCMAKE_C_COMPILER=clang \
