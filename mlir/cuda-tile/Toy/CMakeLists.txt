@@ -1,3 +1,7 @@
+find_package(CUDAToolkit REQUIRED)
+
+message(STATUS "CUDA Toolkit found: ${CUDAToolkit_INCLUDE_DIRS}")
+
 # For a better template to copy, see examples/standalone
 include_directories(include)
 add_subdirectory(include)
@@ -12,6 +16,8 @@ set(LLVM_LINK_COMPONENTS
 set(LLVM_TARGET_DEFINITIONS mlir/ToyCombine.td)
 mlir_tablegen(ToyCombine.inc -gen-rewriters)
 add_public_tablegen_target(ToyCudaCombineIncGen)
+
+add_subdirectory(cuda_wrapper)
 
 add_executable(
   toy-cuda
@@ -54,4 +60,5 @@ target_link_libraries(toy-cuda
     MLIRSupport
     MLIRTargetLLVMIRExport
     MLIRTransforms
+    cuda_shim
   )
