@@ -373,16 +373,20 @@ void MulOp::inferShapes() { getResult().setType(getLhs().getType()); }
 //===----------------------------------------------------------------------===//
 
 llvm::LogicalResult ReturnOp::verify() {
-  // We know that the parent operation is a function, because of the 'HasParent'
-  // trait attached to the operation definition.
-  auto function = cast<FuncOp>((*this)->getParentOp());
+  // Parent can be FuncOp or GPUFuncOp; both implement FunctionOpInterface.
+  auto *parent = (*this)->getParentOp();
+  auto function = dyn_cast<FunctionOpInterface>(parent);
+  if (!function)
+    return emitOpError() << "must be enclosed in a function-like op";
+
 
   /// ReturnOps can only have a single optional operand.
   if (getNumOperands() > 1)
     return emitOpError() << "expects at most 1 return operand";
 
   // The operand number and types must match the function signature.
-  const auto &results = function.getFunctionType().getResults();
+  auto funcType = llvm::cast<FunctionType>(function.getFunctionType());
+  const auto &results = funcType.getResults();
   if (getNumOperands() != results.size())
     return emitOpError() << "does not return the same number of values ("
                          << getNumOperands() << ") as the enclosing function ("
@@ -487,6 +491,79 @@ llvm::LogicalResult MatMulOp::verify() {
   }
 
   return mlir::success();
+}
+
+//===----------------------------------------------------------------------===//
+// LaunchGpuOp
+//===----------------------------------------------------------------------===//
+
+void LaunchGpuOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
+                          StringRef callee, ArrayRef<mlir::Value> arguments) {
+  // Generic call always returns an unranked Tensor initially.
+  state.addTypes(UnrankedTensorType::get(builder.getF32Type()));
+  state.addOperands(arguments);
+  state.addAttribute("callee",
+                     mlir::SymbolRefAttr::get(builder.getContext(), callee));
+  state.addAttribute("grid", builder.getI64ArrayAttr({1, 1, 1}));
+}
+
+/// Return the callee of the generic call operation, this is required by the
+/// call interface.
+CallInterfaceCallable LaunchGpuOp::getCallableForCallee() {
+  return (*this)->getAttrOfType<SymbolRefAttr>("callee");
+}
+
+/// Set the callee for the generic call operation, this is required by the call
+/// interface.
+void LaunchGpuOp::setCalleeFromCallable(CallInterfaceCallable callee) {
+  (*this)->setAttr("callee", cast<SymbolRefAttr>(callee));
+}
+
+/// Get the argument operands to the called function, this is required by the
+/// call interface.
+Operation::operand_range LaunchGpuOp::getArgOperands() { return getInputs(); }
+
+/// Get the argument operands to the called function as a mutable range, this is
+/// required by the call interface.
+MutableOperandRange LaunchGpuOp::getArgOperandsMutable() {
+  return getInputsMutable();
+}
+
+
+//===----------------------------------------------------------------------===//
+// GPUFuncOp
+//===----------------------------------------------------------------------===//
+
+void GPUFuncOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
+                   llvm::StringRef name, mlir::FunctionType type,
+                   llvm::ArrayRef<mlir::NamedAttribute> attrs) {
+  // FunctionOpInterface provides a convenient `build` method that will populate
+  // the state of our GPUFuncOp, and create an entry block.
+  buildWithEntryBlock(builder, state, name, type, attrs, type.getInputs());
+}
+
+mlir::ParseResult GPUFuncOp::parse(mlir::OpAsmParser &parser,
+                                mlir::OperationState &result) {
+  // Dispatch to the FunctionOpInterface provided utility method that parses the
+  // function operation.
+  auto buildFuncType =
+      [](mlir::Builder &builder, llvm::ArrayRef<mlir::Type> argTypes,
+         llvm::ArrayRef<mlir::Type> results,
+         mlir::function_interface_impl::VariadicFlag,
+         std::string &) { return builder.getFunctionType(argTypes, results); };
+
+  return mlir::function_interface_impl::parseFunctionOp(
+      parser, result, /*allowVariadic=*/false,
+      getFunctionTypeAttrName(result.name), buildFuncType,
+      getArgAttrsAttrName(result.name), getResAttrsAttrName(result.name));
+}
+
+void GPUFuncOp::print(mlir::OpAsmPrinter &p) {
+  // Dispatch to the FunctionOpInterface provided utility method that prints the
+  // function operation.
+  mlir::function_interface_impl::printFunctionOp(
+      p, *this, /*isVariadic=*/false, getFunctionTypeAttrName(),
+      getArgAttrsAttrName(), getResAttrsAttrName());
 }
 
 //===----------------------------------------------------------------------===//

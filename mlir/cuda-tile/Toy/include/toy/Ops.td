@@ -311,7 +311,7 @@ def ReshapeOp : Toy_Op<"reshape", [Pure]> {
 // ReturnOp
 //===----------------------------------------------------------------------===//
 
-def ReturnOp : Toy_Op<"return", [Pure, HasParent<"FuncOp">,
+def ReturnOp : Toy_Op<"return", [Pure, HasParent<"FuncOp, GPUFuncOp">,
                                  Terminator]> {
   let summary = "return operation";
   let description = [{
@@ -403,6 +403,96 @@ def MatMulOp : Toy_Op<"matmul",
   ];
 
   let hasVerifier = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// lauch GPU Op
+//===----------------------------------------------------------------------===//
+
+def LaunchGpuOp : Toy_Op<"launch_gpu",
+    [DeclareOpInterfaceMethods<CallOpInterface>]> {
+  let summary = "launch gpu kernel operation";
+  let description = [{
+    The "launch_gpu" operation launches a GPU kernel with given grid
+    dimensions.
+
+    ```mlir
+     %4 = toy.launch_gpu @my_func(%1, %3) {grid = [16, 16, 1]}
+           : (tensor<2x3xf32>, tensor<2x3xf32>)
+    ```
+
+  }];
+
+  let arguments = (ins
+    FlatSymbolRefAttr:$callee,
+    Variadic<F32Tensor>:$inputs,
+    OptionalAttr<DictArrayAttr>:$arg_attrs,
+    OptionalAttr<DictArrayAttr>:$res_attrs
+  );
+
+  let results = (outs Variadic<F32Tensor>:$results);
+
+  let assemblyFormat = [{
+    $callee `(` $inputs `)` attr-dict `:` functional-type($inputs, results)
+  }];
+
+  let builders = [
+    OpBuilder<(ins "StringRef":$callee, "ArrayRef<Value>":$arguments)>
+  ];
+}
+
+//===----------------------------------------------------------------------===//
+// GPUFuncOp
+//===----------------------------------------------------------------------===//
+
+def GPUFuncOp : Toy_Op<"gpu_func", [
+    FunctionOpInterface, IsolatedFromAbove
+  ]> {
+  let summary = "GPU kernel function operation";
+  let description = [{
+    The "toy.gpu_func" operation represents a GPU kernel function. These are
+    callable SSA-region operations that contain toy computations to be run on
+    the GPU.
+
+    Example:
+
+    ```mlir
+    toy.gpu_func @my_kernel(tensor<*xf32> %arg0, tensor<*xf32> %arg1) {
+      ...
+      toy.return
+    }
+    ```
+  }];
+
+  let arguments = (ins
+    SymbolNameAttr:$sym_name,
+    TypeAttrOf<FunctionType>:$function_type,
+    OptionalAttr<DictArrayAttr>:$arg_attrs,
+    OptionalAttr<DictArrayAttr>:$res_attrs
+  );
+
+  let regions = (region AnyRegion:$body);
+
+  let builders = [OpBuilder<(ins
+    "StringRef":$name, "FunctionType":$type,
+    CArg<"ArrayRef<NamedAttribute>", "{}">:$attrs)
+  >];
+  let extraClassDeclaration = [{
+    //===------------------------------------------------------------------===//
+    // FunctionOpInterface Methods
+    //===------------------------------------------------------------------===//
+
+    /// Returns the argument types of this function.
+    ArrayRef<Type> getArgumentTypes() { return getFunctionType().getInputs(); }
+
+    /// Returns the result types of this function.
+    ArrayRef<Type> getResultTypes() { return getFunctionType().getResults(); }
+
+    /// Returns the region on the function operation that is callable.
+    Region *getCallableRegion() { return &getBody(); }
+  }];
+  let hasCustomAssemblyFormat = 1;
+  let skipDefaultBuilders = 1;
 }
 
 #endif // TOY_OPS
