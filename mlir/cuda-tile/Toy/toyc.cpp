@@ -81,6 +81,7 @@ enum Action {
   RunJIT,
   DumpGpuIR,
   DumpCudaTileIR,
+  DumpGpuAffine,
   DumpGPULLVMIR,
   RunNVGPUJIT
 };
@@ -101,6 +102,9 @@ static cl::opt<enum Action> emitAction(
                           "output the GPU dialect MLIR dump")),
     cl::values(clEnumValN(DumpCudaTileIR, "cuda-tile-ir",
                           "output the Cuda Tile dialect MLIR dump")),
+    cl::values(clEnumValN(DumpGpuAffine, "gpu-affine",
+                          "output the GPU dialect MLIR dump after affine "
+                          "lowering")),
     cl::values(clEnumValN(DumpGPULLVMIR, "gpu-llvm",
                           "output the GPU LLVM dialect MLIR dump")),
     cl::values(clEnumValN(RunNVGPUJIT, "nv-gpu-jit",
@@ -329,8 +333,24 @@ static int loadAndProcessMLIRGPU(mlir::MLIRContext &context,
 
   // Now process the toy mlir with gpu outline pass.
   optPM.addPass(mlir::toy::createGpuOutlinePass(assignGrid));
-  // pm.addPass(mlir::toy::createCudaTileLoweringPass(assignGrid));
+  // pm.addPass(mlir::toy::createCudaTileLoweringPass());
   // pm.addPass(mlir::toy::createLowerGpuHostToLLVMPass());
+  // bool isLoweringToAffine = emitAction >= Action::DumpGpuAffine;
+  // if (isLoweringToAffine) {
+  //   // Partially lower the toy dialect.
+  //   optPM.addPass(mlir::toy::createLowerToAffinePass());
+
+  //   // Add a few cleanups post lowering.
+  //   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
+  //   optPM.addPass(mlir::createCanonicalizerPass());
+  //   optPM.addPass(mlir::createCSEPass());
+
+  //   // Add optimizations if enabled.
+  //   if (enableOpt) {
+  //     optPM.addPass(mlir::affine::createLoopFusionPass());
+  //     optPM.addPass(mlir::affine::createAffineScalarReplacementPass());
+  //   }
+  // }
 
   if (mlir::failed(pm.run(*module)))
     return 4;
