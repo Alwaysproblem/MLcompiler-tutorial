@@ -37,6 +37,7 @@
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
 
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
 #include "llvm/IR/Module.h"
@@ -77,7 +78,11 @@ enum Action {
   DumpMLIRAffine,
   DumpMLIRLLVM,
   DumpLLVMIR,
-  RunJIT
+  RunJIT,
+  DumpGpuIR,
+  DumpCudaTileIR,
+  DumpGPULLVMIR,
+  RunNVGPUJIT
 };
 } // namespace
 static cl::opt<enum Action> emitAction(
@@ -91,7 +96,19 @@ static cl::opt<enum Action> emitAction(
     cl::values(clEnumValN(DumpLLVMIR, "llvm", "output the LLVM IR dump")),
     cl::values(
         clEnumValN(RunJIT, "jit",
-                   "JIT the code and run it by invoking the main function")));
+                   "JIT the code and run it by invoking the main function")),
+    cl::values(clEnumValN(DumpGpuIR, "gpu-ir",
+                          "output the GPU dialect MLIR dump")),
+    cl::values(clEnumValN(DumpCudaTileIR, "cuda-tile-ir",
+                          "output the Cuda Tile dialect MLIR dump")),
+    cl::values(clEnumValN(DumpGPULLVMIR, "gpu-llvm",
+                          "output the GPU LLVM dialect MLIR dump")),
+    cl::values(clEnumValN(RunNVGPUJIT, "nv-gpu-jit",
+                          "JIT the code for NVGPU and run it by invoking the "
+                          "main function")));
+
+static cl::opt<std::string> assignGrid("grid", cl::init("1,1,1"),
+                                       cl::desc("Assign the grid dimensions"));
 
 static cl::opt<bool> enableOpt("opt", cl::desc("Enable optimizations"));
 
@@ -288,6 +305,46 @@ static int runJit(mlir::ModuleOp module) {
   return 0;
 }
 
+static int loadAndProcessMLIRGPU(mlir::MLIRContext &context,
+                                 mlir::OwningOpRef<mlir::ModuleOp> &module) {
+  llvm::SmallSet<llvm::StringRef, 4> gpuOperations = {"matmul", "add", "mul",
+                                                      "transpose"};
+  if (int error = loadMLIR(context, module))
+    return error;
+
+  mlir::PassManager pm(module.get()->getName());
+  // Apply any generic pass manager command line options and run the pipeline.
+  if (mlir::failed(mlir::applyPassManagerCLOptions(pm)))
+    return 4;
+
+  // Inline all functions into main and then delete them.
+  pm.addPass(mlir::createInlinerPass());
+
+  // Now that there is only one function, we can infer the shapes of each of
+  // the operations.
+  mlir::OpPassManager &optPM = pm.nest<mlir::toy::FuncOp>();
+  optPM.addPass(mlir::toy::createShapeInferencePass());
+  optPM.addPass(mlir::createCanonicalizerPass());
+  optPM.addPass(mlir::createCSEPass());
+
+  // Now process the toy mlir with gpu outline pass.
+  optPM.addPass(mlir::toy::createGpuOutlinePass(assignGrid));
+  // pm.addPass(mlir::toy::createCudaTileLoweringPass(assignGrid));
+  // pm.addPass(mlir::toy::createLowerGpuHostToLLVMPass());
+
+  if (mlir::failed(pm.run(*module)))
+    return 4;
+  return 0;
+}
+
+static int dumpGpuLLVMIR(mlir::ModuleOp module) {
+  // Simply dump the MLIR module at this stage.
+  module.dump();
+  return 0;
+}
+
+static int runGpuJit(mlir::ModuleOp module) { return 0; }
+
 int main(int argc, char **argv) {
   // Register any command line options.
   mlir::registerAsmPrinterCLOptions();
@@ -309,6 +366,31 @@ int main(int argc, char **argv) {
   context.getOrLoadDialect<mlir::toy::ToyDialect>();
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
+
+  if (emitAction > Action::RunJIT) {
+    llvm::outs() << "The GPU related actions will be used\n";
+    llvm::outs() << "Grid dimensions: " << assignGrid << "\n";
+
+    if (int error = loadAndProcessMLIRGPU(context, module))
+      return error;
+
+    // If we aren't exporting to non-mlir, then we are done.
+    bool isOutputingMLIR = emitAction <= Action::RunNVGPUJIT;
+    if (isOutputingMLIR) {
+      module->dump();
+      return 0;
+    }
+
+    if (emitAction == Action::DumpGPULLVMIR)
+      return dumpGpuLLVMIR(*module);
+
+    if (emitAction == Action::RunNVGPUJIT)
+      return runGpuJit(*module);
+
+    llvm::errs() << "No action specified (parsing only?), use -emit=<action>\n";
+    return -1;
+  }
+
   if (int error = loadAndProcessMLIR(context, module))
     return error;
 

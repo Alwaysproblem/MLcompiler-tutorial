@@ -28,7 +28,9 @@ add_executable(
   mlir/LowerToAffineLoops.cpp
   mlir/LowerToLLVM.cpp
   mlir/ShapeInferencePass.cpp
-  mlir/ToyCombine.cpp)
+  mlir/ToyCombine.cpp
+  mlir/LowerToGpu.cpp
+  )
 
 add_dependencies(toy-cuda
   ToyCudaShapeInferenceInterfaceIncGen

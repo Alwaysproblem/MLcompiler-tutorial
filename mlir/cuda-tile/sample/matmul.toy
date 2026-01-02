@@ -5,10 +5,12 @@ def main() {
 
   # b is identical to a, the literal tensor is implicitly reshaped: defining new
   # variables is the way to reshape tensors (element count must match).
-  var b<2, 3> = [1, 2, 3, 4, 5, 6];
+  var b<2, 3> = [11, 12, 13, 14, 15, 16];
 
   # transpose() and print() are the only builtin, the following will transpose
   # a and b and perform an element-wise multiplication before printing the result.
   # print(a * b + b);
   print(matmul(a, transpose(b)));
+  var c<2, 3> = [[7, 8, 9], [10, 11, 12]];
+  print(a * c + b);
 }

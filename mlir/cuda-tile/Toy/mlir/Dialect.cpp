@@ -379,7 +379,6 @@ llvm::LogicalResult ReturnOp::verify() {
   if (!function)
     return emitOpError() << "must be enclosed in a function-like op";
 
-
   /// ReturnOps can only have a single optional operand.
   if (getNumOperands() > 1)
     return emitOpError() << "expects at most 1 return operand";
@@ -498,7 +497,7 @@ llvm::LogicalResult MatMulOp::verify() {
 //===----------------------------------------------------------------------===//
 
 void LaunchGpuOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                          StringRef callee, ArrayRef<mlir::Value> arguments) {
+                        StringRef callee, ArrayRef<mlir::Value> arguments) {
   // Generic call always returns an unranked Tensor initially.
   state.addTypes(UnrankedTensorType::get(builder.getF32Type()));
   state.addOperands(arguments);
@@ -529,21 +528,20 @@ MutableOperandRange LaunchGpuOp::getArgOperandsMutable() {
   return getInputsMutable();
 }
 
-
 //===----------------------------------------------------------------------===//
 // GPUFuncOp
 //===----------------------------------------------------------------------===//
 
 void GPUFuncOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                   llvm::StringRef name, mlir::FunctionType type,
-                   llvm::ArrayRef<mlir::NamedAttribute> attrs) {
+                      llvm::StringRef name, mlir::FunctionType type,
+                      llvm::ArrayRef<mlir::NamedAttribute> attrs) {
   // FunctionOpInterface provides a convenient `build` method that will populate
   // the state of our GPUFuncOp, and create an entry block.
   buildWithEntryBlock(builder, state, name, type, attrs, type.getInputs());
 }
 
 mlir::ParseResult GPUFuncOp::parse(mlir::OpAsmParser &parser,
-                                mlir::OperationState &result) {
+                                   mlir::OperationState &result) {
   // Dispatch to the FunctionOpInterface provided utility method that parses the
   // function operation.
   auto buildFuncType =
