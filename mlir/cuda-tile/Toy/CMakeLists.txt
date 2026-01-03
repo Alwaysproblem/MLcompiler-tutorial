@@ -37,6 +37,8 @@ add_dependencies(toy-cuda
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/include/)
+target_link_directories(toy-cuda PRIVATE ${CUDA_TILE_BINARY_DIR}/lib)
+
 target_link_libraries(toy-cuda
   PRIVATE
     MLIRAnalysis

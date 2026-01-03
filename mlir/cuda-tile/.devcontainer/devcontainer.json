@@ -9,7 +9,7 @@
     "context": "${localWorkspaceFolder}/.devcontainer",
     "dockerfile": "Dockerfile",
     "options": [
-      "--net=host"
+      "--network=host"
     ],
     "args": {
       "UID": "1000",
@@ -41,7 +41,7 @@
     // "seccomp=unconfined",
     "--name",
     // "${localEnv:USER}-tvm",
-    "yyx-mlir-example",
+    "yyx-cuda-tile",
     // "-v",
     // "/data/rech/yongxiy/Desktop/dockerVolumn:/root/Desktop/dockerVolumn"
   ],

@@ -18,7 +18,9 @@ cmake .. -Wno-dev -G Ninja \
   -DMLIR_DIR=${_workspaceFolder}/third_party/llvm/lib/cmake/mlir \
   -DLLVM_DIR=${_workspaceFolder}/third_party/llvm/lib/cmake/llvm \
   -DCMAKE_MODULE_PATH="${_workspaceFolder}/third_party/llvm/lib/cmake/mlir;${_workspaceFolder}/third_party/llvm/lib/cmake/llvm" \
-  -DMLIR_TABLEGEN_EXE=${_workspaceFolder}/third_party/llvm/bin/mlir-tblgen
+  -DMLIR_TABLEGEN_EXE=${_workspaceFolder}/third_party/llvm/bin/mlir-tblgen \
+  -DCUDA_TILE_BINARY_DIR=${_workspaceFolder}/third_party/cuda-tile/build/ \
+  -DCUDA_TILE_SOURCE_DIR=${_workspaceFolder}/third_party/cuda-tile
 
 # ninja
 cmake \
