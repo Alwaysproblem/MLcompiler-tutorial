@@ -1,7 +1,3 @@
-find_package(CUDAToolkit REQUIRED)
-
-message(STATUS "CUDA Toolkit found: ${CUDAToolkit_INCLUDE_DIRS}")
-
 # For a better template to copy, see examples/standalone
 include_directories(include)
 add_subdirectory(include)
@@ -30,6 +26,7 @@ add_executable(
   mlir/ShapeInferencePass.cpp
   mlir/ToyCombine.cpp
   mlir/LowerToGpu.cpp
+  mlir/LowerToCudaTile.cpp
   )
 
 add_dependencies(toy-cuda
@@ -62,5 +59,6 @@ target_link_libraries(toy-cuda
     MLIRSupport
     MLIRTargetLLVMIRExport
     MLIRTransforms
+    CudaTileDialect
     cuda_shim
   )

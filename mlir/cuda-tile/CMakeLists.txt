@@ -20,11 +20,17 @@ message(STATUS "MLIR_INCLUDE_DIR include dir: ${MLIR_INCLUDE_DIR}")
 # This is for non-conda users. 
 find_package(LLVM CONFIG PATHS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/cmake/llvm) 
 find_package(MLIR CONFIG PATHS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/lib/cmake/mlir)
-
+find_package(CUDAToolkit REQUIRED)
 # set(MLIR_TABLEGEN_EXE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/bin/mlir-tblgen)
+message(STATUS "CUDA Toolkit found: ${CUDAToolkit_INCLUDE_DIRS}")
+message(STATUS "CUDA_TILE_SOURCE_DIR include dir: ${CUDA_TILE_SOURCE_DIR}")
+message(STATUS "CUDA_TILE_BINARY_DIR include dir: ${CUDA_TILE_BINARY_DIR}")
 
 include_directories(${LLVM_INCLUDE_DIR})
 include_directories(${MLIR_INCLUDE_DIR})
+include_directories(${CUDAToolkit_INCLUDE_DIRS})
+include_directories(${CUDA_TILE_SOURCE_DIR}/include)
+include_directories(${CUDA_TILE_BINARY_DIR}/include)
 
 include(LLVMDistributionSupport)
 include(TableGen)

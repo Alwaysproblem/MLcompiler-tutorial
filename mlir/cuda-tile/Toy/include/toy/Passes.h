@@ -32,6 +32,8 @@ std::unique_ptr<mlir::Pass> createLowerToLLVMPass();
 
 std::unique_ptr<mlir::Pass> createGpuOutlinePass(std::string grid="1,1,1");
 
+std::unique_ptr<mlir::Pass> createCudaTileLoweringPass();
+
 } // namespace toy
 } // namespace mlir
 

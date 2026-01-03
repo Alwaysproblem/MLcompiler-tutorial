@@ -17,7 +17,7 @@ cmake -G Ninja -S ${WORKSPACEROOT}/third_party/cuda-tile -B build \
   -DLLVM_ENABLE_ASSERTIONS=OFF \
   -DCUDA_TILE_ENABLE_BINDINGS_PYTHON=OFF \
   -DCUDA_TILE_ENABLE_TESTING=OFF \
-  -DCUDA_TILE_INSTALL_DIR=${WORKSPACEROOT}/third_party/cuda \
+  -DCMAKE_INSTALL_PREFIX=${WORKSPACEROOT}/third_party/cuda \
   -DCUDA_TILE_USE_LLVM_INSTALL_DIR=${WORKSPACEROOT}/third_party/llvm
 
 cmake --build build 

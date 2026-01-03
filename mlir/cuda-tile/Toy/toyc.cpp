@@ -333,7 +333,8 @@ static int loadAndProcessMLIRGPU(mlir::MLIRContext &context,
 
   // Now process the toy mlir with gpu outline pass.
   optPM.addPass(mlir::toy::createGpuOutlinePass(assignGrid));
-  // pm.addPass(mlir::toy::createCudaTileLoweringPass());
+  // mlir::OpPassManager &gpuOptPM = pm.nest<mlir::toy::GPUFuncOp>();
+  pm.addPass(mlir::toy::createCudaTileLoweringPass());
   // pm.addPass(mlir::toy::createLowerGpuHostToLLVMPass());
   // bool isLoweringToAffine = emitAction >= Action::DumpGpuAffine;
   // if (isLoweringToAffine) {
