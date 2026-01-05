@@ -15,6 +15,7 @@
 #include "mlir/Support/TypeID.h"
 #include "toy/Dialect.h"
 #include "toy/Passes.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallSet.h"
@@ -27,6 +28,7 @@
 #include "cuda_tile/Dialect/CudaTile/IR/Dialect.h"
 #include "cuda_tile/Dialect/CudaTile/IR/Ops.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -60,7 +62,7 @@ mlir::cuda_tile::ModuleOp createCudaModuleOp(mlir::OpBuilder &builder,
   auto cudaTileModuleOp = mlir::cuda_tile::ModuleOp::create(
       builder, moduleOp.getLoc(), "cuda_tile_module");
 
-  LDBG() << "Created CudaTile Module: \n" << cudaTileModuleOp << "\n";
+  LDBG() << "Created CudaTile Module: \n" << cudaTileModuleOp;
   return cudaTileModuleOp;
 }
 
@@ -70,7 +72,7 @@ void ToyToCudaTileLoweringPass::runOnOperation() {
   // Here we would implement the actual lowering logic from Toy GPUFuncOp
   // to CudaTile operations. For now, we just log that the pass is running.
   // LDBG() << "Running Toy to CudaTile lowering on GPUFuncOp: " << moduleOp
-  //        << "\n";
+  //        ;
 
   mlir::OpBuilder builder(moduleOp.getContext());
   // 1. Create new cuda_tile.module Op in the last section.
@@ -86,28 +88,33 @@ void ToyToCudaTileLoweringPass::runOnOperation() {
         gfunOp->getAttrOfType<mlir::StringAttr>("sym_name").getValue();
     llvm::SmallVector<mlir::Type, 8> newArgTypes;
 
-    LDBG() << "Lowering GPU function: " << gfunc_name << "\n";
-    LDBG() << "Converting input type into cuda tile type" << "\n";
+    LDBG() << "Lowering GPU function: " << gfunc_name;
+    LDBG() << "Converting input type into cuda tile type";
+
+    llvm::SmallVector<llvm::ArrayRef<int64_t>, 4> inputShapes;
+    // llvm::SmallVector<llvm::ArrayRef<int64_t>, 4> resultShapes;
 
     for (mlir::Type t : gfunOp.getFunctionType().getInputs()) {
-      LDBG() << "Original arg type: " << t << "\n";
+      LDBG() << "Original arg type: " << t;
       auto tt = llvm::dyn_cast<mlir::TensorType>(t);
       auto elemType = tt.getElementType();
       auto ptrElem = mlir::cuda_tile::PointerType::get(elemType);
       auto newType = mlir::cuda_tile::TileType::get({}, ptrElem);
-      LDBG() << "The new arg type for cuda tile: " << newType << "\n";
+      LDBG() << "The new arg type for cuda tile: " << newType;
       newArgTypes.push_back(newType);
+      inputShapes.push_back(tt.getShape());
     }
 
-    LDBG() << "Converting result type into cuda tile type" << "\n";
+    LDBG() << "Converting result type into cuda tile type";
     for (mlir::Type t : gfunOp.getFunctionType().getResults()) {
-      LDBG() << "Original result type: " << t << "\n";
+      LDBG() << "Original result type: " << t;
       auto tt = llvm::dyn_cast<mlir::TensorType>(t);
       auto elemType = tt.getElementType();
       auto ptrElem = mlir::cuda_tile::PointerType::get(elemType);
       auto newType = mlir::cuda_tile::TileType::get({}, ptrElem);
-      LDBG() << "The new arg type for cuda tile: " << newType << "\n";
+      LDBG() << "The new arg type for cuda tile: " << newType;
       newArgTypes.push_back(newType);
+      inputShapes.push_back(tt.getShape());
     }
 
     auto newFnType = builder.getFunctionType(newArgTypes, {});
@@ -118,9 +125,35 @@ void ToyToCudaTileLoweringPass::runOnOperation() {
         /*arg_attrs=*/{}, /*res_attrs=*/{}, {});
     auto bb = cudaEntryOp.addEntryBlock();
     builder.setInsertionPointToStart(bb);
+    // 1. create a get_tile_block_id op
+    auto tileBlockId = mlir::cuda_tile::GetTileBlockIdOp::create(
+        builder, gfunOp->getLoc(),
+        {mlir::cuda_tile::TileType::get({}, builder.getI32Type()),
+         mlir::cuda_tile::TileType::get({}, builder.getI32Type()),
+         mlir::cuda_tile::TileType::get({}, builder.getI32Type())});
+    for (auto [idx, arg] : llvm::enumerate(bb->getArguments())) {
+      // 2. create a make_tensor_view op
+      auto resultType = builder.getI64ArrayAttr(inputShapes[idx]);
+      LDBG() << "Argument " << idx << " : " << arg << ", shape: " << resultType;
+      auto ptrElem = llvm::dyn_cast<mlir::cuda_tile::TileType>(arg.getType())
+                         .getElementType();
+      auto eleType = llvm::dyn_cast<mlir::cuda_tile::PointerType>(ptrElem)
+                         .getPointeeType();
+      mlir::cuda_tile::TensorViewType tensorViewType =
+          mlir::cuda_tile::TensorViewType::get(
+              builder.getContext(), eleType, inputShapes[idx],
+              /*strides=*/{inputShapes[idx].back(), 1});
+      // LDBG() << "Creating TensorViewType: " << tensorViewType;
+      auto make_tensor_view = mlir::cuda_tile::MakeTensorViewOp::create(
+          builder, gfunOp->getLoc(), tensorViewType, arg,
+          /*dynamicShape=*/mlir::ValueRange{},
+          /*dynamicStrides=*/mlir::ValueRange{});
+      // LDBG() << "Created MakeTensorViewOp: \n" << make_tensor_view  ;
+    }
+
     auto retOp = mlir::cuda_tile::ReturnOp::create(builder, gfunOp.getLoc());
 
-    LDBG() << "Created CudaTile Entry Op: \n" << cudaEntryOp << "\n";
+    LDBG() << "Created CudaTile Entry Op: \n" << cudaEntryOp;
   });
 }
 

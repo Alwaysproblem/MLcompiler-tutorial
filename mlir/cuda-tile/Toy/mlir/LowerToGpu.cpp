@@ -58,9 +58,7 @@ struct GpuOutlinePass
 
   llvm::StringRef getArgument() const override { return "toy-gpu-outline"; }
 
-  void initializeOptions(std::string grid) {
-    this->grid = grid;
-  }
+  void initializeOptions(std::string grid) { this->grid = grid; }
 
   void runOnOperation() override {
     auto func = getOperation();
@@ -124,11 +122,11 @@ struct GpuOutlinePass
     }
 
     for (const auto &gpuSubgraph : gpuSubgraphs) {
-      LDBG() << "----GPU subgraph----\n";
+      LDBG() << "----GPU subgraph----";
       for (const auto &op : gpuSubgraph) {
-        LDBG() << *op << "\n";
+        LDBG() << *op;
       }
-      LDBG() << "--------------------\n";
+      LDBG() << "--------------------";
     }
 
     llvm::SmallVector<std::string> outlinedFuncNames;
@@ -144,9 +142,9 @@ struct GpuOutlinePass
 
     for (const auto &[index, gpuSubgraph] : llvm::enumerate(gpuSubgraphs)) {
       if (!gpuSubgraph.empty()) {
-        LDBG() << "----GPU subgraph----\n";
+        LDBG() << "----GPU subgraph----";
         for (const auto &op : gpuSubgraph) {
-          LDBG() << *op << "\n";
+          LDBG() << *op;
         }
 
         // Identify its operands.
@@ -162,9 +160,9 @@ struct GpuOutlinePass
           }
         }
 
-        LDBG() << "Operands:\n";
+        LDBG() << "Operands:";
         for (mlir::Value &operand : Operands) {
-          LDBG() << "  " << operand << "\n";
+          LDBG() << "  " << operand;
         }
 
         llvm::SmallVector<mlir::Value, 2> Results;
@@ -181,16 +179,16 @@ struct GpuOutlinePass
           }
         }
 
-        LDBG() << "Results:\n";
+        LDBG() << "Results:";
         for (mlir::Value &result : Results) {
-          LDBG() << "  " << result << "\n";
+          LDBG() << "  " << result;
         }
 
         if (Results.size() != 1) {
           llvm::errs()
               << "Currently only support single result GPU kernel "
               << "Since the toy return op only supports single return value "
-              << "Found " << Results.size() << " results\n";
+              << "Found " << Results.size() << " results";
           return signalPassFailure();
         }
 
@@ -244,7 +242,7 @@ struct GpuOutlinePass
           mlir::toy::ReturnOp::create(kernelBuilder, func.getLoc(),
                                       mappedResults);
 
-          LDBG() << "Created GPU kernel: " << gpuFunc << "\n";
+          LDBG() << "Created GPU kernel: " << gpuFunc;
         }
 
         outlinedFuncNames.push_back(outline_func_name);
@@ -269,9 +267,9 @@ struct GpuOutlinePass
 
           for (mlir::Operation *op : llvm::reverse(gpuSubgraph))
             op->erase();
-          LDBG() << "Inserted LaunchGpuOp: " << launch << "\n";
+          LDBG() << "Inserted LaunchGpuOp: " << launch;
         }
-        LDBG() << "--------------------\n";
+        LDBG() << "--------------------";
       }
     }
   };
