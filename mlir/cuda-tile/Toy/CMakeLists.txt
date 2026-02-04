@@ -27,6 +27,7 @@ add_executable(
   mlir/ToyCombine.cpp
   mlir/LowerToGpu.cpp
   mlir/LowerToCudaTile.cpp
+  mlir/EmitCudaTile.cpp
   )
 
 add_dependencies(toy-cuda
@@ -62,5 +63,8 @@ target_link_libraries(toy-cuda
     MLIRTargetLLVMIRExport
     MLIRTransforms
     CudaTileDialect
+    CudaTileTransforms
+    CudaTileBytecodeWriter
+    CudaTileBytecodeCommon
     cuda_shim
   )

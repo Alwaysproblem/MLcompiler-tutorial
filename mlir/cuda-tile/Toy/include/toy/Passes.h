@@ -30,9 +30,13 @@ std::unique_ptr<mlir::Pass> createLowerToAffinePass();
 /// well as `Affine` and `Std`, to the LLVM dialect for codegen.
 std::unique_ptr<mlir::Pass> createLowerToLLVMPass();
 
-std::unique_ptr<mlir::Pass> createGpuOutlinePass(std::string grid="1,1,1");
+std::unique_ptr<mlir::Pass> createGpuOutlinePass(std::string grid = "1,1,1");
 
 std::unique_ptr<mlir::Pass> createCudaTileLoweringPass();
+
+std::unique_ptr<mlir::Pass>
+createEmbedCudaTileBinaryPass(std::string tileirasExe = "tileiras",
+                              std::string gpuName = "sm_120");
 
 } // namespace toy
 } // namespace mlir

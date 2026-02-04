@@ -335,23 +335,27 @@ static int loadAndProcessMLIRGPU(mlir::MLIRContext &context,
   optPM.addPass(mlir::toy::createGpuOutlinePass(assignGrid));
   // mlir::OpPassManager &gpuOptPM = pm.nest<mlir::toy::GPUFuncOp>();
   pm.addPass(mlir::toy::createCudaTileLoweringPass());
+  pm.addPass(mlir::createCSEPass());
+
   // pm.addPass(mlir::toy::createLowerGpuHostToLLVMPass());
-  // bool isLoweringToAffine = emitAction >= Action::DumpGpuAffine;
-  // if (isLoweringToAffine) {
-  //   // Partially lower the toy dialect.
-  //   optPM.addPass(mlir::toy::createLowerToAffinePass());
+  bool isLoweringToAffine = emitAction >= Action::DumpGpuAffine;
+  if (isLoweringToAffine) {
+    pm.addPass(mlir::toy::createEmbedCudaTileBinaryPass(
+        "/usr/local/cuda/bin/tileiras", "sm_120"));
+    //   // Partially lower the toy dialect.
+    //   optPM.addPass(mlir::toy::createLowerToAffinePass());
 
-  //   // Add a few cleanups post lowering.
-  //   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
-  //   optPM.addPass(mlir::createCanonicalizerPass());
-  //   optPM.addPass(mlir::createCSEPass());
+    //   // Add a few cleanups post lowering.
+    //   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
+    //   optPM.addPass(mlir::createCanonicalizerPass());
+    //   optPM.addPass(mlir::createCSEPass());
 
-  //   // Add optimizations if enabled.
-  //   if (enableOpt) {
-  //     optPM.addPass(mlir::affine::createLoopFusionPass());
-  //     optPM.addPass(mlir::affine::createAffineScalarReplacementPass());
-  //   }
-  // }
+    //   // Add optimizations if enabled.
+    //   if (enableOpt) {
+    //     optPM.addPass(mlir::affine::createLoopFusionPass());
+    //     optPM.addPass(mlir::affine::createAffineScalarReplacementPass());
+    //   }
+  }
 
   if (mlir::failed(pm.run(*module)))
     return 4;
