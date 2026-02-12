@@ -68,7 +68,9 @@
         "llvm-vs-code-extensions.vscode-clangd",
         "llvm-vs-code-extensions.lldb-dap",
         "mutantdino.resourcemonitor",
-        "hoovercj.vscode-power-mode"
+        "hoovercj.vscode-power-mode",
+        "GitHub.copilot-chat",
+        "Codereviewforgithubcopilot.github-copilot-code-review"
       ]
     }
   }

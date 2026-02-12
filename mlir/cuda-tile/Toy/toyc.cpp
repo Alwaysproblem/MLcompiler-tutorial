@@ -342,8 +342,10 @@ static int loadAndProcessMLIRGPU(mlir::MLIRContext &context,
   if (isLoweringToAffine) {
     pm.addPass(mlir::toy::createEmbedCudaTileBinaryPass(
         "/usr/local/cuda/bin/tileiras", "sm_120"));
-    //   // Partially lower the toy dialect.
-    //   optPM.addPass(mlir::toy::createLowerToAffinePass());
+
+    // mlir::OpPassManager &gpuOptPM = pm.nest<mlir::toy::FuncOp>();
+    // // Partially lower the toy dialect.
+    // pm.addPass(mlir::toy::createLowerToAffinePass());
 
     //   // Add a few cleanups post lowering.
     //   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();

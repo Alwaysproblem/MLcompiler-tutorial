@@ -28,7 +28,7 @@
 // Copy from
 // third_party/llvm-project/mlir/lib/ExecutionEngine/CudaRuntimeWrappers.cpp
 
-#if CUDA_VERSION >= 13000
+// #if CUDA_VERSION >= 13000
 
 #define MLIR_CUDA_WRAPPERS_EXPORT __attribute__((visibility("default")))
 
@@ -518,11 +518,11 @@ cuda_shim_launch_block_packed(uint64_t module_handle, uint64_t kernel_name_ptr,
 extern "C" void cuda_shim_ctx_synchronize(void) { mgpuCtxSynchronize(); }
 
 // only for debugging
-// extern "C" void cuda_debug_dump_float(uint64_t dptr, int n) {
-//   auto *p = reinterpret_cast<const float *>(static_cast<uintptr_t>(dptr));
-//   for (uint32_t i = 0; i < n; ++i) {
-//     fprintf(stderr, "i=%u v=%f\n", i, p[i]);
-//   }
-// }
+extern "C" void cuda_debug_dump_float(uint64_t dptr, int n) {
+  auto *p = reinterpret_cast<const float*>(static_cast<uintptr_t>(dptr));
+  for (uint32_t i = 0; i < n; ++i) {
+    fprintf(stderr, "i=%u v=%f\n", i, p[i]);
+  }
+}
 
-#endif
+// #endif
