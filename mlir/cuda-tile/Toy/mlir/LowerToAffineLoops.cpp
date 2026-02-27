@@ -412,11 +412,13 @@ memref::GlobalOp createGlobalForStringAttr(mlir::PatternRewriter &rewriter,
   std::vector<uint8_t> bytes(str.begin(), str.end());
   bytes.push_back(0);
 
+  auto type = RankedTensorType::get({(int64_t)bytes.size()},
+                                    rewriter.getIntegerType(8));
+
   auto memrefType =
       MemRefType::get({(int64_t)bytes.size()}, rewriter.getIntegerType(8));
 
-  auto denseAttr =
-      DenseElementsAttr::get(memrefType, llvm::ArrayRef<uint8_t>(bytes));
+  auto denseAttr = DenseElementsAttr::get(type, llvm::ArrayRef<uint8_t>(bytes));
 
   auto global = memref::GlobalOp::create(
       rewriter, loc, sym_name,
@@ -426,6 +428,22 @@ memref::GlobalOp createGlobalForStringAttr(mlir::PatternRewriter &rewriter,
       /*alignment=*/nullptr);
 
   return global;
+}
+
+arith::IndexCastOp getIndexFromGlobalMemref(mlir::PatternRewriter &rewriter,
+                                            Location loc,
+                                            memref::GlobalOp global) {
+  auto getGlobalOp = memref::GetGlobalOp::create(
+      rewriter, loc, global->getResult(0).getType(), global.getName());
+  memref::ExtractAlignedPointerAsIndexOp extractOp =
+      memref::ExtractAlignedPointerAsIndexOp::create(
+          rewriter, loc, rewriter.getIndexType(), getGlobalOp.getResult());
+
+  auto globalType = llvm::cast<MemRefType>(global.getType());
+  auto size = globalType.getShape()[0];
+  auto sizeValue = rewriter.create<arith::ConstantIndexOp>(loc, size);
+  return rewriter.create<arith::IndexCastOp>(loc, rewriter.getI64Type(),
+                                             sizeValue);
 }
 
 struct LanchGpuLowering : public ConversionPattern {
@@ -446,6 +464,33 @@ struct LanchGpuLowering : public ConversionPattern {
       }
     }
 
+    // %3 = toy.launch_gpu @outlined_gpu_kernel_0(%0, %2, %1) {cuda_arch =
+    // "sm_120", cuda_binary_path = "/tmp/cuda_tile-d7f3fd.bin",
+    // cuda_binary_size = 10112 : i64, grid = array<i64: 1, 1, 1>} :
+    // (tensor<2x4xf32>, tensor<2x4xf32>, tensor<2x4xf32>) -> tensor<2x4xf32>
+    // the `%3` is the output value of the launch op, `%0`, `%2`, `%1` are the
+    // operands to be passed to the GPU kernel, and the attributes are the
+    // launch configuration for the GPU kernel.
+    // so we need to create the output tensor since the cuda tile entry op
+    // will take the output tensor as argument instead of return value.
+    // and as we did before, the last operand is the output tensor, and the rest
+    // are input tensors.
+    // moreover, we assume the memory life time of the output tensor is the
+    // whole main function, so we can just allocate it at the beginning of the
+    // main function and pass it to the cuda tile entry op which means we won't
+    // promote the deallocation of the output tensor from the last op of the
+    // block to the end of use.
+
+    auto outputType = llvm::cast<RankedTensorType>(
+        launchGpuOp->getResults().front().getType());
+
+    auto outputMemRefType = convertTensorToMemRef(outputType);
+    auto outputTensorAlloc =
+        insertAllocAndDealloc(outputMemRefType, loc, rewriter);
+
+    // extract the `cuda_binary_path` attribute from the launch op, and create a
+    // global memref for it, which will be used in the cuda tile entry op to
+    // load the cuda binary.
     auto cudaBinaryPathAttr =
         launchGpuOp->getDiscardableAttr("cuda_binary_path");
     if (!cudaBinaryPathAttr) {
@@ -467,15 +512,29 @@ struct LanchGpuLowering : public ConversionPattern {
     auto kernel_name_memref = createGlobalForStringAttr(
         rewriter, launchGpuOp, "kname", rewriter.getStringAttr(kernelName));
 
-    auto nbytesVal = arith::ConstantIndexOp::create(rewriter, loc, 1);
-    auto streamVal = arith::ConstantIndexOp::create(rewriter, loc, 0);
+    // load the cuda binary path from the global memref.
+    auto cuda_blob_loaded = memref::GetGlobalOp::create(
+        rewriter, loc, cuda_blob_memref->getResult(0).getType(), "cuda_blob");
+
+    auto kname_loaded = memref::GetGlobalOp::create(
+        rewriter, loc, kernel_name_memref->getResult(0).getType(), "kname");
+
+    // handle the input of the launch op, we will create a cuda allocation for
+    // each input tensor.
+    for (auto operand : launchGpuOp->getOperands()) {
+      auto ranked_tensor_type = llvm::cast<RankedTensorType>(operand.getType());
+      auto shape = ranked_tensor_type.getShape();
+    }
+
+    auto nbytesVal = arith::ConstantIntOp::create(rewriter, loc, 1, 64);
+    auto streamVal = arith::ConstantIntOp::create(rewriter, loc, 0, 64);
     auto isHostSharedVal = arith::ConstantIntOp::create(rewriter, loc, 0, 1);
 
     auto callee =
         registry.call(rewriter, launchGpuOp, CudaShimFn::Malloc,
                       ValueRange{nbytesVal, streamVal, isHostSharedVal});
 
-    rewriter.replaceOp(op, callee);
+    rewriter.replaceOp(op, outputTensorAlloc);
     return success();
   }
 };
