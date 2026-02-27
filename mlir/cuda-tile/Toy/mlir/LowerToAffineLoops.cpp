@@ -12,6 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "cuda_shim/CudaShimBuilder.hpp"
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinDialect.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -19,12 +21,15 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/DialectRegistry.h"
+#include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/TypeID.h"
 #include "toy/Dialect.h"
 #include "toy/Passes.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/DebugLog.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -36,9 +41,8 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Sequence.h"
-#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/Casting.h"
-#include <algorithm>
+#include "llvm/Support/Debug.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -390,6 +394,92 @@ struct MatMulOpLowering : public ConversionPattern {
   }
 };
 
+memref::GlobalOp createGlobalForStringAttr(mlir::PatternRewriter &rewriter,
+                                           Operation *op,
+                                           llvm::StringRef sym_name,
+                                           StringAttr attr) {
+  auto loc = op->getLoc();
+  auto moduleOp = op->getParentOfType<ModuleOp>();
+
+  if (auto global = moduleOp.lookupSymbol<memref::GlobalOp>(sym_name); global) {
+    return global;
+  }
+
+  OpBuilder::InsertionGuard guard(rewriter);
+  rewriter.setInsertionPointToStart(moduleOp.getBody());
+
+  auto str = attr.getValue();
+  std::vector<uint8_t> bytes(str.begin(), str.end());
+  bytes.push_back(0);
+
+  auto memrefType =
+      MemRefType::get({(int64_t)bytes.size()}, rewriter.getIntegerType(8));
+
+  auto denseAttr =
+      DenseElementsAttr::get(memrefType, llvm::ArrayRef<uint8_t>(bytes));
+
+  auto global = memref::GlobalOp::create(
+      rewriter, loc, sym_name,
+      /*sym_visibility=*/rewriter.getStringAttr("private"), memrefType,
+      denseAttr,
+      /*constant=*/true,
+      /*alignment=*/nullptr);
+
+  return global;
+}
+
+struct LanchGpuLowering : public ConversionPattern {
+  LanchGpuLowering(MLIRContext *ctx)
+      : ConversionPattern(toy::LaunchGpuOp::getOperationName(), 1, ctx) {}
+
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto loc = op->getLoc();
+    CudaShimRegistry registry(op->getParentOfType<ModuleOp>());
+
+    toy::LaunchGpuOp launchGpuOp = llvm::cast<toy::LaunchGpuOp>(op);
+    for (auto ranked_tensor_type : launchGpuOp->getOperands()) {
+      if (!llvm::isa<RankedTensorType>(ranked_tensor_type.getType())) {
+        return rewriter.notifyMatchFailure(op, "expected operand to be a "
+                                               "ranked tensor type");
+      }
+    }
+
+    auto cudaBinaryPathAttr =
+        launchGpuOp->getDiscardableAttr("cuda_binary_path");
+    if (!cudaBinaryPathAttr) {
+      return rewriter.notifyMatchFailure(
+          op, "expected 'cuda_binary_path' attribute to be present");
+    }
+
+    auto cudaBinaryPathStr = llvm::dyn_cast<StringAttr>(cudaBinaryPathAttr);
+    if (!cudaBinaryPathStr) {
+      return rewriter.notifyMatchFailure(
+          op, "expected 'cuda_binary_path' attribute to be a string");
+    }
+
+    auto cuda_blob_memref = createGlobalForStringAttr(
+        rewriter, launchGpuOp, "cuda_blob", cudaBinaryPathStr);
+
+    auto kernelName = launchGpuOp.getCallee();
+
+    auto kernel_name_memref = createGlobalForStringAttr(
+        rewriter, launchGpuOp, "kname", rewriter.getStringAttr(kernelName));
+
+    auto nbytesVal = arith::ConstantIndexOp::create(rewriter, loc, 1);
+    auto streamVal = arith::ConstantIndexOp::create(rewriter, loc, 0);
+    auto isHostSharedVal = arith::ConstantIntOp::create(rewriter, loc, 0, 1);
+
+    auto callee =
+        registry.call(rewriter, launchGpuOp, CudaShimFn::Malloc,
+                      ValueRange{nbytesVal, streamVal, isHostSharedVal});
+
+    rewriter.replaceOp(op, callee);
+    return success();
+  }
+};
+
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -442,7 +532,7 @@ void ToyToAffineLoweringPass::runOnOperation() {
   RewritePatternSet patterns(&getContext());
   patterns.add<AddOpLowering, ConstantOpLowering, FuncOpLowering, MulOpLowering,
                PrintOpLowering, ReturnOpLowering, TransposeOpLowering,
-               MatMulOpLowering>(&getContext());
+               MatMulOpLowering, LanchGpuLowering>(&getContext());
 
   // With the target and rewrite patterns defined, we can now attempt the
   // conversion. The conversion will signal failure if any of our `illegal`
