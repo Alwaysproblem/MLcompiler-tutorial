@@ -23,11 +23,13 @@
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
+#include "mlir/IR/Value.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/TypeID.h"
 #include "toy/Dialect.h"
 #include "toy/Passes.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/DebugLog.h"
 
@@ -430,36 +432,55 @@ memref::GlobalOp createGlobalForStringAttr(mlir::PatternRewriter &rewriter,
   return global;
 }
 
+arith::IndexCastOp getIndexFromValue(mlir::PatternRewriter &rewriter,
+                                     Location loc, Value value) {
+  auto extractOp = memref::ExtractAlignedPointerAsIndexOp::create(
+      rewriter, loc, rewriter.getIndexType(), value);
+  auto indexCastOp = arith::IndexCastOp::create(
+      rewriter, loc, rewriter.getI64Type(), extractOp.getResult());
+  return indexCastOp;
+}
+
 arith::IndexCastOp getIndexFromGlobalMemref(mlir::PatternRewriter &rewriter,
                                             Location loc,
                                             memref::GlobalOp global) {
 
   auto getGlobalOp = memref::GetGlobalOp::create(
       rewriter, loc, global.getType(), global.getName());
-  auto extractOp = memref::ExtractAlignedPointerAsIndexOp::create(
-      rewriter, loc, rewriter.getIndexType(), getGlobalOp.getResult());
 
-  auto indexCastOp = arith::IndexCastOp::create(
-      rewriter, loc, rewriter.getI64Type(), extractOp.getResult());
-
-  return indexCastOp;
+  return getIndexFromValue(rewriter, loc, getGlobalOp.getResult());
 }
 
-struct LanchGpuLowering : public ConversionPattern {
-  LanchGpuLowering(MLIRContext *ctx)
-      : ConversionPattern(toy::LaunchGpuOp::getOperationName(), 1, ctx) {}
+func::CallOp
+createCallToCudaShimMalloc(mlir::PatternRewriter &rewriter, Location loc,
+                           CudaShimRegistry &registry, func::CallOp stream,
+                           arith::ConstantIntOp nbytesVal, bool isHostShared) {
+  arith::ConstantIntOp isHostSharedVal;
+  if (isHostShared) {
+    isHostSharedVal = arith::ConstantIntOp::create(rewriter, loc, 1, 1);
+  } else {
+    isHostSharedVal = arith::ConstantIntOp::create(rewriter, loc, 0, 1);
+  }
+  auto sreamVal = stream.getResult(0);
+  auto callee = registry.call(rewriter, stream, CudaShimFn::Malloc,
+                              ValueRange{nbytesVal, sreamVal, isHostSharedVal});
+  return callee;
+}
+
+struct LanchGpuLowering : public OpConversionPattern<toy::LaunchGpuOp> {
+  using OpConversionPattern<toy::LaunchGpuOp>::OpConversionPattern;
 
   LogicalResult
-  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+  matchAndRewrite(toy::LaunchGpuOp launchGpuOp, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
-    auto loc = op->getLoc();
-    CudaShimRegistry registry(op->getParentOfType<ModuleOp>());
+    auto loc = launchGpuOp->getLoc();
+    CudaShimRegistry registry(launchGpuOp->getParentOfType<ModuleOp>());
 
-    toy::LaunchGpuOp launchGpuOp = llvm::cast<toy::LaunchGpuOp>(op);
     for (auto ranked_tensor_type : launchGpuOp->getOperands()) {
       if (!llvm::isa<RankedTensorType>(ranked_tensor_type.getType())) {
-        return rewriter.notifyMatchFailure(op, "expected operand to be a "
-                                               "ranked tensor type");
+        return rewriter.notifyMatchFailure(launchGpuOp,
+                                           "expected operand to be a "
+                                           "ranked tensor type");
       }
     }
 
@@ -494,15 +515,16 @@ struct LanchGpuLowering : public ConversionPattern {
         launchGpuOp->getDiscardableAttr("cuda_binary_path");
     if (!cudaBinaryPathAttr) {
       return rewriter.notifyMatchFailure(
-          op, "expected 'cuda_binary_path' attribute to be present");
+          launchGpuOp, "expected 'cuda_binary_path' attribute to be present");
     }
 
     auto cudaBinaryPathStr = llvm::dyn_cast<StringAttr>(cudaBinaryPathAttr);
     if (!cudaBinaryPathStr) {
       return rewriter.notifyMatchFailure(
-          op, "expected 'cuda_binary_path' attribute to be a string");
+          launchGpuOp, "expected 'cuda_binary_path' attribute to be a string");
     }
 
+    // add the global memref for the cuda binary path and the kernel name.
     auto cuda_blob_memref = createGlobalForStringAttr(
         rewriter, launchGpuOp, "cuda_blob", cudaBinaryPathStr);
 
@@ -520,25 +542,61 @@ struct LanchGpuLowering : public ConversionPattern {
     // Added blob size.
     auto blob_size =
         llvm::cast<MemRefType>(cuda_blob_memref.getType()).getShape()[0];
-    arith::ConstantIndexOp blob_size_index =
-        arith::ConstantIndexOp::create(rewriter, loc, blob_size);
+    auto blob_size_index =
+        arith::ConstantIntOp::create(rewriter, loc, blob_size, 64);
 
-    // handle the input of the launch op, we will create a cuda allocation for
-    // each input tensor.
-    for (auto operand : launchGpuOp->getOperands()) {
-      auto ranked_tensor_type = llvm::cast<RankedTensorType>(operand.getType());
+    // create a call to the cuda shim function to load the cuda binary
+    auto load_cubin_callee =
+        registry.call(rewriter, launchGpuOp, CudaShimFn::LoadModuleFromFile,
+                      ValueRange{cuda_blob_index, blob_size_index});
+
+    // create a stream for the kernel launch, for simplicity we use the default
+    // stream (0).
+    auto stream =
+        registry.call(rewriter, launchGpuOp, CudaShimFn::StreamCreate);
+
+    // we assume the number of output tensors is only 1, and it's the last
+    // operand of the launch op.
+    llvm::SmallVector<Value, 8> devicePtrs;
+    llvm::SmallVector<Value, 8> cudaAllInputs;
+
+    for (auto operand : adaptor.getOperands()) {
+      cudaAllInputs.push_back(operand);
+    }
+    cudaAllInputs.push_back(outputTensorAlloc);
+    mlir::func::CallOp memcpyH2DCall;
+    for (auto [i, opr] : llvm::enumerate(cudaAllInputs)) {
+      auto ranked_tensor_type = llvm::cast<MemRefType>(opr.getType());
       auto shape = ranked_tensor_type.getShape();
+      auto elem_type = ranked_tensor_type.getElementType();
+      auto nbytes = llvm::divideCeil(
+          shape[0] * shape[1] * elem_type.getIntOrFloatBitWidth(), 8);
+      auto nbytesVal = arith::ConstantIntOp::create(rewriter, loc, nbytes, 64);
+      auto device_ptr_callOp = createCallToCudaShimMalloc(
+          rewriter, loc, registry, stream, nbytesVal, false);
+
+      devicePtrs.push_back(device_ptr_callOp.getResult(0));
+
+      auto host_ptr = getIndexFromValue(rewriter, loc, opr);
+      registry.call(
+          rewriter, launchGpuOp, CudaShimFn::MemcpyH2D,
+          ValueRange{device_ptr_callOp.getResult(0), host_ptr, nbytesVal});
+      if (i >= adaptor.getOperands().size()) {
+        // this is the output tensor, we will add memcpy from device to host for
+        // it after the kernel launch.
+        memcpyH2DCall = registry.call(
+            rewriter, launchGpuOp, CudaShimFn::MemcpyD2H,
+            ValueRange{device_ptr_callOp.getResult(0), host_ptr, nbytesVal});
+      }
     }
 
-    auto nbytesVal = arith::ConstantIntOp::create(rewriter, loc, 1, 64);
-    auto streamVal = arith::ConstantIntOp::create(rewriter, loc, 0, 64);
-    auto isHostSharedVal = arith::ConstantIntOp::create(rewriter, loc, 0, 1);
+    // add free after the kernel launch.
+    for (auto operand : llvm::reverse(devicePtrs)) {
+      registry.call(rewriter, launchGpuOp, CudaShimFn::Free,
+                    ValueRange{operand, stream.getResult(0)});
+    }
 
-    auto callee =
-        registry.call(rewriter, launchGpuOp, CudaShimFn::Malloc,
-                      ValueRange{nbytesVal, streamVal, isHostSharedVal});
-
-    rewriter.replaceOp(op, outputTensorAlloc);
+    rewriter.replaceOp(launchGpuOp, outputTensorAlloc);
     return success();
   }
 };
