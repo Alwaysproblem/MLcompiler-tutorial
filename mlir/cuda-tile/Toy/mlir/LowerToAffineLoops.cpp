@@ -433,17 +433,16 @@ memref::GlobalOp createGlobalForStringAttr(mlir::PatternRewriter &rewriter,
 arith::IndexCastOp getIndexFromGlobalMemref(mlir::PatternRewriter &rewriter,
                                             Location loc,
                                             memref::GlobalOp global) {
-  auto getGlobalOp = memref::GetGlobalOp::create(
-      rewriter, loc, global->getResult(0).getType(), global.getName());
-  memref::ExtractAlignedPointerAsIndexOp extractOp =
-      memref::ExtractAlignedPointerAsIndexOp::create(
-          rewriter, loc, rewriter.getIndexType(), getGlobalOp.getResult());
 
-  auto globalType = llvm::cast<MemRefType>(global.getType());
-  auto size = globalType.getShape()[0];
-  auto sizeValue = rewriter.create<arith::ConstantIndexOp>(loc, size);
-  return rewriter.create<arith::IndexCastOp>(loc, rewriter.getI64Type(),
-                                             sizeValue);
+  auto getGlobalOp = memref::GetGlobalOp::create(
+      rewriter, loc, global.getType(), global.getName());
+  auto extractOp = memref::ExtractAlignedPointerAsIndexOp::create(
+      rewriter, loc, rewriter.getIndexType(), getGlobalOp.getResult());
+
+  auto indexCastOp = arith::IndexCastOp::create(
+      rewriter, loc, rewriter.getI64Type(), extractOp.getResult());
+
+  return indexCastOp;
 }
 
 struct LanchGpuLowering : public ConversionPattern {
@@ -513,11 +512,16 @@ struct LanchGpuLowering : public ConversionPattern {
         rewriter, launchGpuOp, "kname", rewriter.getStringAttr(kernelName));
 
     // load the cuda binary path from the global memref.
-    auto cuda_blob_loaded = memref::GetGlobalOp::create(
-        rewriter, loc, cuda_blob_memref->getResult(0).getType(), "cuda_blob");
+    auto cuda_blob_index =
+        getIndexFromGlobalMemref(rewriter, loc, cuda_blob_memref);
+    auto kname_loaded_index =
+        getIndexFromGlobalMemref(rewriter, loc, kernel_name_memref);
 
-    auto kname_loaded = memref::GetGlobalOp::create(
-        rewriter, loc, kernel_name_memref->getResult(0).getType(), "kname");
+    // Added blob size.
+    auto blob_size =
+        llvm::cast<MemRefType>(cuda_blob_memref.getType()).getShape()[0];
+    arith::ConstantIndexOp blob_size_index =
+        arith::ConstantIndexOp::create(rewriter, loc, blob_size);
 
     // handle the input of the launch op, we will create a cuda allocation for
     // each input tensor.
