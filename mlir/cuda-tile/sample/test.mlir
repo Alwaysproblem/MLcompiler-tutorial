@@ -127,15 +127,15 @@ module {
     memref.store %12, %alloc_35[%c3_52] : memref<4xi64>
     %c8_i64_53 = arith.constant 8 : i64
     memref.store %c8_i64_53, %alloc_36[%c3_52] : memref<4xi64>
+    %c8_i32 = arith.constant 8 : i32
     %c1_i32 = arith.constant 1 : i32
     %c1_i32_54 = arith.constant 1 : i32
-    %c1_i32_55 = arith.constant 1 : i32
     %c4_i32 = arith.constant 4 : i32
-    %intptr_56 = memref.extract_aligned_pointer_as_index %alloc_35 : memref<4xi64> -> index
-    %14 = arith.index_cast %intptr_56 : index to i64
-    %intptr_57 = memref.extract_aligned_pointer_as_index %alloc_36 : memref<4xi64> -> index
-    %15 = arith.index_cast %intptr_57 : index to i64
-    call @cuda_shim_launch_block_packed(%4, %3, %c1_i32, %c1_i32_54, %c1_i32_55, %5, %14, %15, %c4_i32) : (i64, i64, i32, i32, i32, i64, i64, i64, i32) -> ()
+    %intptr_55 = memref.extract_aligned_pointer_as_index %alloc_35 : memref<4xi64> -> index
+    %14 = arith.index_cast %intptr_55 : index to i64
+    %intptr_56 = memref.extract_aligned_pointer_as_index %alloc_36 : memref<4xi64> -> index
+    %15 = arith.index_cast %intptr_56 : index to i64
+    call @cuda_shim_launch_block_packed(%4, %3, %c8_i32, %c1_i32, %c1_i32_54, %5, %14, %15, %c4_i32) : (i64, i64, i32, i32, i32, i64, i64, i64, i32) -> ()
     call @cuda_shim_stream_synchronize(%5) : (i64) -> ()
     call @cuda_shim_memcpy_d2h(%13, %12, %c32_i64_49) : (i64, i64, i64) -> ()
     memref.dealloc %alloc_35 : memref<4xi64>

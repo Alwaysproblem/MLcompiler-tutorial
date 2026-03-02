@@ -6,6 +6,22 @@
 #include "mlir/IR/Value.h"
 #include "llvm/ADT/DenseMap.h"
 
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/Diagnostics.h"
+#include "mlir/IR/Operation.h"
+#include "mlir/IR/PatternMatch.h"
+#include "mlir/IR/Types.h"
+#include "mlir/IR/Value.h"
+#include "mlir/IR/ValueRange.h"
+#include "mlir/Support/LLVM.h"
+#include "mlir/Transforms/DialectConversion.h"
+
 enum class CudaShimFn {
   // ----- Module -----
   LoadModuleFromImage,
@@ -199,3 +215,84 @@ private:
   mlir::ModuleOp module;
   llvm::DenseMap<unsigned, mlir::func::FuncOp> cache;
 };
+
+inline mlir::memref::GlobalOp
+createGlobalForStringAttr(mlir::PatternRewriter &rewriter, mlir::Operation *op,
+                          llvm::StringRef sym_name, mlir::StringAttr attr) {
+  auto loc = op->getLoc();
+  auto moduleOp = op->getParentOfType<mlir::ModuleOp>();
+
+  if (auto global = moduleOp.lookupSymbol<mlir::memref::GlobalOp>(sym_name);
+      global) {
+    return global;
+  }
+
+  mlir::OpBuilder::InsertionGuard guard(rewriter);
+  rewriter.setInsertionPointToStart(moduleOp.getBody());
+
+  auto str = attr.getValue();
+  std::vector<uint8_t> bytes(str.begin(), str.end());
+  bytes.push_back(0);
+
+  auto type = mlir::RankedTensorType::get({(int64_t)bytes.size()},
+                                          rewriter.getIntegerType(8));
+
+  auto memrefType = mlir::MemRefType::get({(int64_t)bytes.size()},
+                                          rewriter.getIntegerType(8));
+
+  auto denseAttr =
+      mlir::DenseElementsAttr::get(type, llvm::ArrayRef<uint8_t>(bytes));
+
+  auto global = mlir::memref::GlobalOp::create(
+      rewriter, loc, sym_name,
+      /*sym_visibility=*/rewriter.getStringAttr("private"), memrefType,
+      denseAttr,
+      /*constant=*/true,
+      /*alignment=*/nullptr);
+
+  return global;
+}
+
+inline mlir::arith::IndexCastOp
+getIndexFromValue(mlir::PatternRewriter &rewriter, mlir::Location loc,
+                  mlir::Value value) {
+  auto extractOp = mlir::memref::ExtractAlignedPointerAsIndexOp::create(
+      rewriter, loc, rewriter.getIndexType(), value);
+  auto indexCastOp = mlir::arith::IndexCastOp::create(
+      rewriter, loc, rewriter.getI64Type(), extractOp.getResult());
+  return indexCastOp;
+}
+
+inline mlir::arith::IndexCastOp
+getIndexFromGlobalMemref(mlir::PatternRewriter &rewriter, mlir::Location loc,
+                         mlir::memref::GlobalOp global) {
+
+  auto getGlobalOp = mlir::memref::GetGlobalOp::create(
+      rewriter, loc, global.getType(), global.getName());
+
+  return getIndexFromValue(rewriter, loc, getGlobalOp.getResult());
+}
+
+inline mlir::func::CallOp createCallToCudaShimMalloc(
+    mlir::PatternRewriter &rewriter, mlir::Location loc,
+    CudaShimRegistry &registry, mlir::func::CallOp stream,
+    mlir::arith::ConstantIntOp nbytesVal, bool isHostShared) {
+  mlir::arith::ConstantIntOp isHostSharedVal;
+  if (isHostShared) {
+    isHostSharedVal = mlir::arith::ConstantIntOp::create(rewriter, loc, 1, 1);
+  } else {
+    isHostSharedVal = mlir::arith::ConstantIntOp::create(rewriter, loc, 0, 1);
+  }
+  auto sreamVal = stream.getResult(0);
+  auto callee =
+      registry.call(rewriter, stream, CudaShimFn::Malloc,
+                    mlir::ValueRange{nbytesVal, sreamVal, isHostSharedVal});
+  return callee;
+}
+
+inline unsigned long getNbytes(mlir::Type tensorType) {
+  auto ranked_tensor_type = llvm::cast<mlir::MemRefType>(tensorType);
+  return llvm::divideCeil(ranked_tensor_type.getNumElements() *
+                              ranked_tensor_type.getElementTypeBitWidth(),
+                          8);
+}
