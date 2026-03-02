@@ -330,7 +330,7 @@ cuda_shim_load_module_from_file(uint64_t file_path_ptr,
                                 uint64_t /*file_path_nbytes*/) {
   auto file_path_cstr =
       reinterpret_cast<const char *>(asHostCPtr(file_path_ptr));
-  // fprintf(stdout, "%s", file_path_cstr);
+  fprintf(stdout, "%s", file_path_cstr);
   CUmodule module = nullptr;
   ScopedContext scopedContext;
   CUDA_REPORT_IF_ERROR(cuModuleLoad(&module, file_path_cstr));

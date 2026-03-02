@@ -23,6 +23,7 @@
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
+#include "mlir/IR/Types.h"
 #include "mlir/IR/Value.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Support/LLVM.h"
@@ -467,6 +468,13 @@ createCallToCudaShimMalloc(mlir::PatternRewriter &rewriter, Location loc,
   return callee;
 }
 
+unsigned long getNbytes(Type tensorType) {
+  auto ranked_tensor_type = llvm::cast<MemRefType>(tensorType);
+  return llvm::divideCeil(ranked_tensor_type.getNumElements() *
+                              ranked_tensor_type.getElementTypeBitWidth(),
+                          8);
+}
+
 struct LanchGpuLowering : public OpConversionPattern<toy::LaunchGpuOp> {
   using OpConversionPattern<toy::LaunchGpuOp>::OpConversionPattern;
 
@@ -565,12 +573,20 @@ struct LanchGpuLowering : public OpConversionPattern<toy::LaunchGpuOp> {
     }
     cudaAllInputs.push_back(outputTensorAlloc);
     mlir::func::CallOp memcpyH2DCall;
+
+    // ---------- Build argSlots / argSizes from host side ----------
+    auto argSlots =
+        memref::AllocOp::create(rewriter, loc,
+                                MemRefType::get({(int64_t)cudaAllInputs.size()},
+                                                rewriter.getI64Type()));
+
+    auto argSizes =
+        memref::AllocOp::create(rewriter, loc,
+                                MemRefType::get({(int64_t)cudaAllInputs.size()},
+                                                rewriter.getI64Type()));
+
     for (auto [i, opr] : llvm::enumerate(cudaAllInputs)) {
-      auto ranked_tensor_type = llvm::cast<MemRefType>(opr.getType());
-      auto shape = ranked_tensor_type.getShape();
-      auto elem_type = ranked_tensor_type.getElementType();
-      auto nbytes = llvm::divideCeil(
-          shape[0] * shape[1] * elem_type.getIntOrFloatBitWidth(), 8);
+      auto nbytes = getNbytes(opr.getType());
       auto nbytesVal = arith::ConstantIntOp::create(rewriter, loc, nbytes, 64);
       auto device_ptr_callOp = createCallToCudaShimMalloc(
           rewriter, loc, registry, stream, nbytesVal, false);
@@ -578,23 +594,104 @@ struct LanchGpuLowering : public OpConversionPattern<toy::LaunchGpuOp> {
       devicePtrs.push_back(device_ptr_callOp.getResult(0));
 
       auto host_ptr = getIndexFromValue(rewriter, loc, opr);
-      registry.call(
-          rewriter, launchGpuOp, CudaShimFn::MemcpyH2D,
-          ValueRange{device_ptr_callOp.getResult(0), host_ptr, nbytesVal});
-      if (i >= adaptor.getOperands().size()) {
+
+      if (i < adaptor.getOperands().size()) {
+        registry.call(
+            rewriter, launchGpuOp, CudaShimFn::MemcpyH2D,
+            ValueRange{device_ptr_callOp.getResult(0), host_ptr, nbytesVal});
+      } else {
         // this is the output tensor, we will add memcpy from device to host for
-        // it after the kernel launch.
+        // it after the kernel launch. and we will move this to the end of lanch
+        // kernel later.
         memcpyH2DCall = registry.call(
             rewriter, launchGpuOp, CudaShimFn::MemcpyD2H,
-            ValueRange{device_ptr_callOp.getResult(0), host_ptr, nbytesVal});
+            ValueRange{host_ptr, device_ptr_callOp.getResult(0), nbytesVal});
       }
+
+      // constuct the argSlots and argSizes on host side for the kernel launch.
+      arith::ConstantIndexOp indexVal =
+          arith::ConstantIndexOp::create(rewriter, loc, i);
+
+      memref::StoreOp::create(rewriter, loc, devicePtrs[i], argSlots,
+                              ValueRange{indexVal});
+
+      auto nElements = arith::ConstantIntOp::create(
+          rewriter, loc, llvm::cast<MemRefType>(opr.getType()).getNumElements(),
+          64);
+
+      // store the size of the argument to argSizes.
+      memref::StoreOp::create(rewriter, loc, nElements, argSizes,
+                              ValueRange{indexVal});
     }
 
+    // create the block size for the kernel lauch.
+    auto gridAttr = launchGpuOp->getDiscardableAttr("grid");
+    if (!gridAttr) {
+      return rewriter.notifyMatchFailure(
+          launchGpuOp, "expected 'grid' attribute to be present");
+    }
+    auto gridArrayAttr = llvm::dyn_cast<DenseI64ArrayAttr>(gridAttr);
+
+    if (!gridArrayAttr || gridArrayAttr.size() != 3) {
+      return rewriter.notifyMatchFailure(
+          launchGpuOp,
+          "expected 'grid' attribute to be an array of 3 integers");
+    }
+
+    // because of the limitation of the unsupported grid size in the cuda tile,
+    // we will just use 1 for all dimensions of the grid.
+    auto blockX = gridArrayAttr[0];
+    auto blockY = gridArrayAttr[1];
+    auto blockZ = gridArrayAttr[2];
+
+    if (!blockX || !blockY || !blockZ) {
+      return rewriter.notifyMatchFailure(
+          launchGpuOp,
+          "expected 'grid' attribute to be an array of 3 integers");
+    }
+
+    arith::ConstantIntOp blockXVal =
+        arith::ConstantIntOp::create(rewriter, loc, blockX, 32);
+    arith::ConstantIntOp blockYVal =
+        arith::ConstantIntOp::create(rewriter, loc, blockY, 32);
+    arith::ConstantIntOp blockZVal =
+        arith::ConstantIntOp::create(rewriter, loc, blockZ, 32);
+
+    // create the number of arguments for the kernel launch, which is the number
+    // of input tensors + 1 (for the output tensor).
+    auto numArgsVal =
+        arith::ConstantIntOp::create(rewriter, loc, cudaAllInputs.size(), 32);
+
+    auto argSlotPtr = getIndexFromValue(rewriter, loc, argSlots);
+    auto argSizePtr = getIndexFromValue(rewriter, loc, argSizes);
+
+    // create a call to the cuda shim function to launch the kernel.
+    registry.call(rewriter, launchGpuOp, CudaShimFn::LaunchBlockPacked,
+                  ValueRange{load_cubin_callee.getResult(0), kname_loaded_index,
+                             blockXVal, blockYVal, blockZVal,
+                             stream.getResult(0), argSlotPtr, argSizePtr,
+                             numArgsVal});
+
+    auto sync =
+        registry.call(rewriter, launchGpuOp, CudaShimFn::StreamSynchronize,
+                      ValueRange{stream.getResult(0)});
+
+    memcpyH2DCall->moveAfter(sync);
+
     // add free after the kernel launch.
+    memref::DeallocOp::create(rewriter, loc, argSlots);
+    memref::DeallocOp::create(rewriter, loc, argSizes);
+
     for (auto operand : llvm::reverse(devicePtrs)) {
       registry.call(rewriter, launchGpuOp, CudaShimFn::Free,
                     ValueRange{operand, stream.getResult(0)});
     }
+
+    // clean up
+    registry.call(rewriter, launchGpuOp, CudaShimFn::StreamDestroy,
+                  ValueRange{stream.getResult(0)});
+    registry.call(rewriter, launchGpuOp, CudaShimFn::UnloadModule,
+                  ValueRange{load_cubin_callee.getResult(0)});
 
     rewriter.replaceOp(launchGpuOp, outputTensorAlloc);
     return success();

@@ -174,19 +174,19 @@ private:
                   },
                   {})};
 
-    // case CudaShimFn::LaunchBlockPacked:
-    //   return {"cuda_shim_launch_block_packed",
-    //           rewriter.getFunctionType(
-    //               {
-    //                   i64,           // module_handle
-    //                   i64,           // kernel_name_ptr
-    //                   i32, i32, i32, // block
-    //                   i64,           // stream
-    //                   i64,           // arg_data_ptr
-    //                   i64,           // arg_sizes_ptr
-    //                   i32            // num_args
-    //               },
-    //               {})};
+    case CudaShimFn::LaunchBlockPacked:
+      return {"cuda_shim_launch_block_packed",
+              rewriter.getFunctionType(
+                  {
+                      i64,           // module_handle
+                      i64,           // kernel_name_ptr
+                      i32, i32, i32, // block
+                      i64,           // stream
+                      i64,           // arg_data_ptr
+                      i64,           // arg_sizes_ptr
+                      i32            // num_args
+                  },
+                  {})};
 
     // ===== Context =====
     case CudaShimFn::CtxSynchronize:
