@@ -9,6 +9,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -295,4 +296,135 @@ inline unsigned long getNbytes(mlir::Type tensorType) {
   return llvm::divideCeil(ranked_tensor_type.getNumElements() *
                               ranked_tensor_type.getElementTypeBitWidth(),
                           8);
+}
+
+extern "C" {
+// Load module from PTX or CUBIN image in memory.
+// Driver API supports cuModuleLoadDataEx for both PTX and cubin (it
+// auto-detects).
+uint64_t cuda_shim_load_module_from_image(uint64_t image_ptr,
+                                          uint64_t image_nbytes);
+uint64_t cuda_shim_load_module_jit_from_image(uint64_t image_ptr,
+                                              uint64_t image_nbytes,
+                                              int opt_level);
+
+uint64_t cuda_shim_load_module_from_file(uint64_t file_path_ptr,
+                                         uint64_t /*file_path_nbytes*/);
+
+void cuda_shim_unload_module(uint64_t module_handle);
+
+uint64_t cuda_shim_malloc(uint64_t nbytes, uint64_t stream,
+                          bool is_host_shared);
+
+void cuda_shim_free(uint64_t dptr, uint64_t stream);
+
+void cuda_shim_memset32(uint64_t dptr, uint32_t value, uint64_t count_dwords,
+                        uint64_t stream);
+void cuda_shim_memset16(uint64_t dptr, uint32_t value, uint64_t count_dwords,
+                        uint64_t stream);
+
+uint64_t cuda_shim_stream_create(void);
+
+void cuda_shim_stream_destroy(uint64_t stream);
+
+void cuda_shim_stream_synchronize(uint64_t stream);
+
+uint64_t cuda_shim_event_create(void);
+
+void cuda_shim_event_destroy(uint64_t ev);
+
+void cuda_shim_event_record(uint64_t ev, uint64_t stream);
+
+void cuda_shim_event_synchronize(uint64_t ev);
+
+void cuda_shim_stream_wait_event(uint64_t stream, uint64_t ev);
+
+// ----------------------------- Memcpy (raw ABI) --------------------------
+// Host pointers are passed as uint64_t. This is the key of 2A.
+
+void cuda_shim_memcpy_h2d(uint64_t dst_dptr, uint64_t src_hptr,
+                          uint64_t nbytes);
+
+void cuda_shim_memcpy_d2h(uint64_t dst_hptr, uint64_t src_dptr,
+                          uint64_t nbytes);
+
+void cuda_shim_launch_packed(uint64_t module_handle, uint64_t kernel_name_ptr,
+                             uint32_t gridX, uint32_t gridY, uint32_t gridZ,
+                             uint32_t blockX, uint32_t blockY, uint32_t blockZ,
+                             uint32_t sharedMemBytes, uint64_t stream,
+                             uint64_t arg_data_ptr, uint64_t arg_sizes_ptr,
+                             uint32_t num_args);
+
+// Convenience: 1D launch, shared=0, stream optional
+void cuda_shim_launch_block_packed(uint64_t module_handle,
+                                   uint64_t kernel_name_ptr, uint32_t blockX,
+                                   uint32_t blockY, uint32_t blockZ,
+                                   uint64_t stream, uint64_t arg_data_ptr,
+                                   uint64_t arg_sizes_ptr, uint32_t num_args);
+
+// Optional: global sync (avoid in async pipeline; prefer event/stream sync)
+void cuda_shim_ctx_synchronize(void);
+
+// only for debugging
+void cuda_debug_dump_float(uint64_t dptr, int n);
+}
+
+static inline llvm::orc::SymbolMap
+buildCudaShimSymbolMap(llvm::orc::MangleAndInterner interner) {
+
+  using llvm::JITSymbolFlags;
+  using llvm::orc::ExecutorAddr;
+  using llvm::orc::ExecutorSymbolDef;
+  using llvm::orc::SymbolMap;
+
+  SymbolMap syms;
+
+  auto add = [&](const char *name, void *addr) {
+    syms[interner(name)] =
+        ExecutorSymbolDef::fromPtr(addr, JITSymbolFlags::Exported);
+  };
+
+  // ---- ctx ----
+  add("cuda_shim_ctx_synchronize", (void *)&cuda_shim_ctx_synchronize);
+
+  // ---- module ----
+  add("cuda_shim_load_module_from_image",
+      (void *)&cuda_shim_load_module_from_image);
+  add("cuda_shim_load_module_jit_from_image",
+      (void *)&cuda_shim_load_module_jit_from_image);
+  add("cuda_shim_load_module_from_file",
+      (void *)&cuda_shim_load_module_from_file);
+  add("cuda_shim_unload_module", (void *)&cuda_shim_unload_module);
+
+  // ---- memory ----
+  add("cuda_shim_malloc", (void *)&cuda_shim_malloc);
+  add("cuda_shim_free", (void *)&cuda_shim_free);
+
+  // ---- memcpy ----
+  add("cuda_shim_memcpy_h2d", (void *)&cuda_shim_memcpy_h2d);
+  add("cuda_shim_memcpy_d2h", (void *)&cuda_shim_memcpy_d2h);
+
+  // ---- stream ----
+  add("cuda_shim_stream_create", (void *)&cuda_shim_stream_create);
+  add("cuda_shim_stream_destroy", (void *)&cuda_shim_stream_destroy);
+  add("cuda_shim_stream_synchronize", (void *)&cuda_shim_stream_synchronize);
+
+  // ---- event ----
+  add("cuda_shim_event_create", (void *)&cuda_shim_event_create);
+  add("cuda_shim_event_destroy", (void *)&cuda_shim_event_destroy);
+  add("cuda_shim_event_record", (void *)&cuda_shim_event_record);
+  add("cuda_shim_event_synchronize", (void *)&cuda_shim_event_synchronize);
+  add("cuda_shim_stream_wait_event", (void *)&cuda_shim_stream_wait_event);
+
+  // ---- launch ----
+  add("cuda_shim_launch_packed", (void *)&cuda_shim_launch_packed);
+  add("cuda_shim_launch_block_packed", (void *)&cuda_shim_launch_block_packed);
+
+  return syms;
+}
+
+static inline void registerCudaShimSymbols(mlir::ExecutionEngine &engine) {
+  engine.registerSymbols([](llvm::orc::MangleAndInterner interner) {
+    return buildCudaShimSymbolMap(interner);
+  });
 }

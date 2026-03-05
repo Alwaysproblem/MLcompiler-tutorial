@@ -7,10 +7,12 @@
 #include "toy/Dialect.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/DebugLog.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/raw_ostream.h"
+#include <string>
 #include <system_error>
 
 using namespace llvm;
@@ -84,9 +86,13 @@ struct EmbedCudaTileBinaryPass
 
   std::string tileirasExe;
   std::string gpuName;
+  std::string cubinOrPtxPath;
+  bool useCache;
 
-  EmbedCudaTileBinaryPass(std::string tileirasExe, std::string gpuName)
-      : tileirasExe(std::move(tileirasExe)), gpuName(std::move(gpuName)) {}
+  EmbedCudaTileBinaryPass(std::string tileirasExe, std::string gpuName,
+                          std::string cubinOrPtxPath, bool useCache)
+      : tileirasExe(std::move(tileirasExe)), gpuName(std::move(gpuName)),
+        cubinOrPtxPath(std::move(cubinOrPtxPath)), useCache(useCache) {}
 
   void runOnOperation() override {
     ModuleOp top = getOperation();
@@ -126,13 +132,38 @@ struct EmbedCudaTileBinaryPass
         return;
       }
 
-      if (std::error_code ec =
-              createTemporaryFile(cudaBinPath, "cuda_tile", "bin")) {
-        op->emitError() << "failed to create temp out bin: " << ec.message();
-        signalPassFailure();
+      if (cubinOrPtxPath.empty()) {
+        if (std::error_code ec =
+                createTemporaryFile(cudaBinPath, "cuda_tile", "bin")) {
+          op->emitError() << "failed to create temp out bin: " << ec.message();
+          signalPassFailure();
+          return;
+        }
+      } else {
+        if (!useCache) {
+          if (llvm::sys::fs::exists(cubinOrPtxPath)) {
+            op->emitWarning() << "cuda binary file exist  " << cubinOrPtxPath
+                              << ", tileiras will overwrite it.";
+            std::error_code ec = llvm::sys::fs::remove(cubinOrPtxPath);
+            if (ec) {
+              op->emitError() << "failed to remove existing cuda binary file: "
+                              << ec.message();
+              signalPassFailure();
+              return;
+            }
+          }
+        }
+        cudaBinPath = cubinOrPtxPath;
+      }
+
+      if (useCache && llvm::sys::fs::exists(cudaBinPath)) {
+        LDBG() << "cuda binary file exist and will be reused: " << cudaBinPath
+               << "\n";
         return;
       }
 
+      // ! [FIXME]: please comment out this following code since this is only
+      // for testing.
       if (failed(writeFileBytes(inPath, tilebcBytes))) {
         op->emitError() << "failed to write temp tilebc";
         signalPassFailure();
@@ -144,6 +175,8 @@ struct EmbedCudaTileBinaryPass
         return;
       }
     });
+
+    LDBG() << "cuda binary path: " << cudaBinPath << "\n";
 
     top->walk([&](toy::LaunchGpuOp launchOp) {
       // ---- Step D: read cuda binary bytes ----
@@ -189,8 +222,10 @@ struct EmbedCudaTileBinaryPass
 namespace mlir::toy {
 
 std::unique_ptr<mlir::Pass>
-createEmbedCudaTileBinaryPass(std::string tileirasExe, std::string gpuName) {
-  return std::make_unique<EmbedCudaTileBinaryPass>(tileirasExe, gpuName);
+createEmbedCudaTileBinaryPass(std::string tileirasExe, std::string gpuName,
+                              std::string cubinOrPtxPath, bool useCache) {
+  return std::make_unique<EmbedCudaTileBinaryPass>(tileirasExe, gpuName,
+                                                   cubinOrPtxPath, useCache);
 };
 
 }; // namespace mlir::toy

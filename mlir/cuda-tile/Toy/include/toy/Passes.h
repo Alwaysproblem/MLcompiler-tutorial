@@ -34,9 +34,9 @@ std::unique_ptr<mlir::Pass> createGpuOutlinePass(std::string grid = "1,1,1");
 
 std::unique_ptr<mlir::Pass> createCudaTileLoweringPass();
 
-std::unique_ptr<mlir::Pass>
-createEmbedCudaTileBinaryPass(std::string tileirasExe = "tileiras",
-                              std::string gpuName = "sm_120");
+std::unique_ptr<mlir::Pass> createEmbedCudaTileBinaryPass(
+    std::string tileirasExe = "tileiras", std::string gpuName = "sm_120",
+    std::string cubinOrPtxPath = "", bool useCache = true);
 
 } // namespace toy
 } // namespace mlir

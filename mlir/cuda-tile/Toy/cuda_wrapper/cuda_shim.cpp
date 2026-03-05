@@ -330,7 +330,7 @@ cuda_shim_load_module_from_file(uint64_t file_path_ptr,
                                 uint64_t /*file_path_nbytes*/) {
   auto file_path_cstr =
       reinterpret_cast<const char *>(asHostCPtr(file_path_ptr));
-  // fprintf(stdout, "%s", file_path_cstr);
+  debug_print("Loading CUDA module from file: %s\n", file_path_cstr);
   CUmodule module = nullptr;
   ScopedContext scopedContext;
   CUDA_REPORT_IF_ERROR(cuModuleLoad(&module, file_path_cstr));
@@ -519,7 +519,7 @@ extern "C" void cuda_shim_ctx_synchronize(void) { mgpuCtxSynchronize(); }
 
 // only for debugging
 extern "C" void cuda_debug_dump_float(uint64_t dptr, int n) {
-  auto *p = reinterpret_cast<const float*>(static_cast<uintptr_t>(dptr));
+  auto *p = reinterpret_cast<const float *>(static_cast<uintptr_t>(dptr));
   for (uint32_t i = 0; i < n; ++i) {
     fprintf(stderr, "i=%u v=%f\n", i, p[i]);
   }

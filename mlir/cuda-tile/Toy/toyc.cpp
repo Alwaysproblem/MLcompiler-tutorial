@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "cuda_shim/CudaShimBuilder.hpp"
 #include "mlir/Dialect/Func/Extensions/AllExtensions.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -115,6 +116,12 @@ static cl::opt<std::string> assignGrid("grid", cl::init("1,1,1"),
                                        cl::desc("Assign the grid dimensions"));
 
 static cl::opt<bool> enableOpt("opt", cl::desc("Enable optimizations"));
+
+static cl::opt<bool> useCache(
+    "use-cache",
+    cl::desc(
+        "Whether to use cache when generating cuda binary, only effective when "
+        "the input is tilebc and the output is cubin/ptx"));
 
 /// Returns a Toy AST resulting from parsing the file or a nullptr on error.
 static std::unique_ptr<toy::ModuleAST>
@@ -333,30 +340,46 @@ static int loadAndProcessMLIRGPU(mlir::MLIRContext &context,
 
   // Now process the toy mlir with gpu outline pass.
   optPM.addPass(mlir::toy::createGpuOutlinePass(assignGrid));
-  // mlir::OpPassManager &gpuOptPM = pm.nest<mlir::toy::GPUFuncOp>();
-  pm.addPass(mlir::toy::createCudaTileLoweringPass());
-  pm.addPass(mlir::createCSEPass());
+  optPM.addPass(mlir::createCSEPass());
+
+  bool isLoweringToGpu = emitAction > Action::DumpGpuIR;
+  if (isLoweringToGpu) {
+    pm.addPass(mlir::toy::createCudaTileLoweringPass());
+    pm.addPass(mlir::createCSEPass());
+  }
 
   // pm.addPass(mlir::toy::createLowerGpuHostToLLVMPass());
   bool isLoweringToAffine = emitAction >= Action::DumpGpuAffine;
   if (isLoweringToAffine) {
     pm.addPass(mlir::toy::createEmbedCudaTileBinaryPass(
-        "/usr/local/cuda/bin/tileiras", "sm_120"));
+        "/usr/local/cuda/bin/tileiras", "sm_120", "/tmp/cuda_tile-94d280.bin",
+        useCache));
 
     // mlir::OpPassManager &gpuOptPM = pm.nest<mlir::toy::FuncOp>();
     // // Partially lower the toy dialect.
     pm.addPass(mlir::toy::createLowerToAffinePass());
 
-    //   // Add a few cleanups post lowering.
-    //   mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
-    //   optPM.addPass(mlir::createCanonicalizerPass());
-    //   optPM.addPass(mlir::createCSEPass());
+    // Add a few cleanups post lowering.
+    mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
+    optPM.addPass(mlir::createCanonicalizerPass());
+    optPM.addPass(mlir::createCSEPass());
 
-    //   // Add optimizations if enabled.
-    //   if (enableOpt) {
-    //     optPM.addPass(mlir::affine::createLoopFusionPass());
-    //     optPM.addPass(mlir::affine::createAffineScalarReplacementPass());
-    //   }
+    // Add optimizations if enabled.
+    if (enableOpt) {
+      optPM.addPass(mlir::affine::createLoopFusionPass());
+      optPM.addPass(mlir::affine::createAffineScalarReplacementPass());
+    }
+
+    bool isLoweringHostToLLVM = emitAction >= Action::DumpGPULLVMIR;
+
+    if (isLoweringHostToLLVM) {
+      // Finish lowering the toy IR to the LLVM dialect.
+      pm.addPass(mlir::toy::createLowerToLLVMPass());
+      // This is necessary to have line tables emitted and basic
+      // debugger working. In the future we will add proper debug information
+      // emission directly from our frontend.
+      pm.addPass(mlir::LLVM::createDIScopeForLLVMFuncOpPass());
+    }
   }
 
   if (mlir::failed(pm.run(*module)))
@@ -364,13 +387,45 @@ static int loadAndProcessMLIRGPU(mlir::MLIRContext &context,
   return 0;
 }
 
-static int dumpGpuLLVMIR(mlir::ModuleOp module) {
-  // Simply dump the MLIR module at this stage.
-  module.dump();
+static int dumpGpuLLVMIR(mlir::ModuleOp module) { return dumpLLVMIR(module); }
+
+static int runGpuJit(mlir::ModuleOp module) {
+  // Initialize LLVM targets.
+  llvm::InitializeNativeTarget();
+  llvm::InitializeNativeTargetAsmPrinter();
+
+  // Register the translation from MLIR to LLVM IR, which must happen before we
+  // can JIT-compile.
+  mlir::registerBuiltinDialectTranslation(*module->getContext());
+  mlir::registerLLVMDialectTranslation(*module->getContext());
+
+  // An optimization pipeline to use within the execution engine.
+  auto optPipeline = mlir::makeOptimizingTransformer(
+      /*optLevel=*/enableOpt ? 3 : 0, /*sizeLevel=*/0,
+      /*targetMachine=*/nullptr);
+
+  // Create an MLIR execution engine. The execution engine eagerly JIT-compiles
+  // the module.
+  mlir::ExecutionEngineOptions engineOptions;
+  // engineOptions.enableObjectDump = true;
+  engineOptions.transformer = optPipeline;
+  auto maybeEngine = mlir::ExecutionEngine::create(module, engineOptions);
+  assert(maybeEngine && "failed to construct an execution engine");
+  auto &engine = maybeEngine.get();
+  registerCudaShimSymbols(*engine);
+
+  engine->initialize();
+
+  // engine->dumpToObjectFile("jit_dump.o");
+  // Invoke the JIT-compiled function.
+  auto invocationResult = engine->invokePacked("main");
+  if (invocationResult) {
+    llvm::errs() << "JIT invocation failed\n";
+    return -1;
+  }
+
   return 0;
 }
-
-static int runGpuJit(mlir::ModuleOp module) { return 0; }
 
 int main(int argc, char **argv) {
   // Register any command line options.
@@ -402,11 +457,15 @@ int main(int argc, char **argv) {
       return error;
 
     // If we aren't exporting to non-mlir, then we are done.
-    bool isOutputingMLIR = emitAction <= Action::RunNVGPUJIT;
+    bool isOutputingMLIR = emitAction < Action::RunNVGPUJIT;
     if (isOutputingMLIR) {
       module->dump();
-      return 0;
     }
+
+    if (emitAction == Action::DumpGpuIR ||
+        emitAction == Action::DumpCudaTileIR ||
+        emitAction == Action::DumpGpuAffine)
+      return 0;
 
     if (emitAction == Action::DumpGPULLVMIR)
       return dumpGpuLLVMIR(*module);
