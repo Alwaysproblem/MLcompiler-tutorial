@@ -1,3 +1,4 @@
+#include "cuda_shim/SupportOps.hpp"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Builders.h"
@@ -65,8 +66,7 @@ struct GpuOutlinePass
     if (func.getName() != "main")
       return;
 
-    llvm::SmallSet<llvm::StringRef, 4> gpuOperations = {"matmul", "add", "mul",
-                                                        "transpose"};
+    llvm::SmallSet<llvm::StringRef, 4> gpuOperations = SUPPORT_OPS;
 
     // // Collect GPU-eligible ops in block order for deterministic cloning.
     // llvm::SmallDenseSet<mlir::Operation *, 8> gpuOpSet;

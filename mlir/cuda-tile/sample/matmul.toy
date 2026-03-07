@@ -9,8 +9,8 @@ def main() {
 
   # transpose() and print() are the only builtin, the following will transpose
   # a and b and perform an element-wise multiplication before printing the result.
-  # print(a * b + b);
-  # print(matmul(a, transpose(b)));
+  print(a * b + b);
+  print(matmul(a, transpose(b)));
   var c<2, 4> = [[7, 8, 9, 13], [10, 11, 12, 14]];
   var d<2, 4> = [[7, 8, 9, 13], [10, 11, 12, 14]];
   print(a * c + b * d);

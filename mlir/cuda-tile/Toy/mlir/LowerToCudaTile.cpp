@@ -2,6 +2,7 @@
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -438,6 +439,59 @@ struct ReturnLowering : public mlir::OpConversionPattern<mlir::toy::ReturnOp> {
 };
 
 //===----------------------------------------------------------------------===//
+// ToyToCudaTile Conversion Patterns: MatMul operations
+//===----------------------------------------------------------------------===//
+
+struct MatMulOpLowering
+    : public mlir::OpConversionPattern<mlir::toy::MatMulOp> {
+  using mlir::OpConversionPattern<mlir::toy::MatMulOp>::OpConversionPattern;
+  using OpAdaptor =
+      typename mlir::OpConversionPattern<mlir::toy::MatMulOp>::OpAdaptor;
+
+  llvm::LogicalResult
+  matchAndRewrite(mlir::toy::MatMulOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const final {
+    auto loc = op->getLoc();
+    auto orgResult =
+        llvm::dyn_cast<mlir::RankedTensorType>(op.getResult().getType());
+
+    auto lhsLogical =
+        llvm::dyn_cast<mlir::RankedTensorType>(op.getLhs().getType());
+    auto rhsLogical =
+        llvm::dyn_cast<mlir::RankedTensorType>(op.getRhs().getType());
+
+    if (!orgResult || !lhsLogical || !rhsLogical) {
+      return rewriter.notifyMatchFailure(
+          op, "LHS or RHS or result is not RankedTensorType");
+    }
+    auto lhsLoaded =
+        ensureTileValue(op.getLhs(), adaptor.getLhs(), lhsLogical, rewriter);
+    auto rhsLoaded =
+        ensureTileValue(op.getRhs(), adaptor.getRhs(), rhsLogical, rewriter);
+
+    LDBG() << "After ensureTileValue LHS: " << lhsLoaded;
+    LDBG() << "After ensureTileValue RHS: " << rhsLoaded;
+
+    auto f32TileTy = mlir::cuda_tile::TileType::get(orgResult.getShape(),
+                                                    rewriter.getF32Type());
+    auto zeroAttr =
+        mlir::DenseFPElementsAttr::get(f32TileTy, llvm::ArrayRef<float>{0});
+    auto acc_init_value =
+        mlir::cuda_tile::ConstantOp::create(rewriter, loc, f32TileTy, zeroAttr);
+
+    auto resTileTy = mlir::cuda_tile::TileType::get(orgResult.getShape(),
+                                                    orgResult.getElementType());
+
+    LDBG() << "MatMul result tile type: " << resTileTy;
+    auto matMulOp = mlir::cuda_tile::MmaFOp::create(
+        rewriter, loc, resTileTy, lhsLoaded, rhsLoaded, acc_init_value);
+
+    rewriter.replaceOp(op, matMulOp.getResult());
+    return llvm::success();
+  }
+};
+
+//===----------------------------------------------------------------------===//
 // ToyToCudaTileLoweringPass
 //===----------------------------------------------------------------------===//
 
@@ -488,7 +542,7 @@ void ToyToCudaTileLoweringPass::runOnOperation() {
     mlir::RewritePatternSet patterns(ctx);
 
     patterns.add<LowerToyGPUFuncToCudaTileEntry, MulOpLowering, AddOpLowering,
-                 ReturnLowering>(typeConverter, ctx);
+                 MatMulOpLowering, ReturnLowering>(typeConverter, ctx);
 
     if (mlir::failed(
             mlir::applyFullConversion(gfun, target, std::move(patterns))))

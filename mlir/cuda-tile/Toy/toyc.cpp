@@ -357,6 +357,8 @@ static int loadAndProcessMLIRGPU(mlir::MLIRContext &context,
 
     // mlir::OpPassManager &gpuOptPM = pm.nest<mlir::toy::FuncOp>();
     // // Partially lower the toy dialect.
+    pm.addNestedPass<mlir::toy::FuncOp>(
+        mlir::toy::createPrepareCudaResourcesPass());
     pm.addPass(mlir::toy::createLowerToAffinePass());
 
     // Add a few cleanups post lowering.

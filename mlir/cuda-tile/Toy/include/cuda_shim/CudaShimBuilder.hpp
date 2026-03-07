@@ -1,3 +1,68 @@
+//===-------------------- CudaShimBuilder.hpp -----------------------------===//
+//
+// CUDA Runtime Shim Layer for MLIR Lowering
+//
+// This header provides a thin abstraction layer ("shim") between MLIR-generated
+// host code and the CUDA Driver API. It is designed to be used during MLIR
+// dialect lowering passes (e.g., from a high-level Toy dialect or GPU dialect
+// down to function calls that interact with the CUDA runtime).
+//
+// Key components:
+//
+//   CudaShimFn (enum class)
+//     Enumerates all supported CUDA shim operations, organized into categories:
+//       - Module:  Loading/unloading CUDA modules (PTX/CUBIN)
+//       - Memory:  Device memory allocation, deallocation, and host↔device
+//                  memory transfers (memcpy H2D / D2H)
+//       - Stream:  Stream creation, destruction, and synchronization
+//       - Event:   (Commented out) Event lifecycle and synchronization
+//       - Launch:  Kernel launch with packed arguments (full grid/block config
+//                  or simplified block-only variant)
+//       - Context: Context-level synchronization
+//
+//   CudaShimRegistry (class)
+//     Manages the declaration and caching of CUDA shim function declarations
+//     within an MLIR ModuleOp. Provides:
+//       - getOrInsert(): Lazily declares a shim function in the module IR
+//       - call():        Emits a func.call operation to a shim function
+//     Function signatures are defined internally via specOf() and map each
+//     CudaShimFn to its C ABI-compatible MLIR FunctionType (using i64/i32/i1).
+//
+//   Utility Functions:
+//     - createGlobalForStringAttr():  Creates a memref.global for a
+//         null-terminated string (e.g., kernel names, file paths)
+//     - getIndexFromValue():          Extracts an aligned pointer from a memref
+//         value and casts it to i64
+//     - getIndexFromGlobalMemref():   Combines memref.get_global + pointer
+//         extraction for global memrefs
+//     - createCallToCudaShimMalloc(): Convenience wrapper to emit a
+//         cuda_shim_malloc call with host-shared flag
+//     - getNbytes():                  Computes the byte size of a MemRefType
+//
+//   C ABI Declarations (extern "C"):
+//     Forward declarations of all CUDA shim runtime functions. These are
+//     implemented in a companion .cpp/.cu file and wrap CUDA Driver API calls
+//     behind a flat C ABI using uint64_t handles for opaque CUDA objects
+//     (modules, streams, events, device pointers).
+//
+//   JIT Symbol Registration:
+//     - buildCudaShimSymbolMap():  Builds an ORC JIT symbol map linking shim
+//         function names to their native addresses
+//     - registerCudaShimSymbols(): Registers all shim symbols with an MLIR
+//         ExecutionEngine, enabling JIT execution of lowered MLIR programs
+//         that call into the CUDA shim layer
+//
+// Usage:
+//   1. Instantiate CudaShimRegistry with the top-level ModuleOp.
+//   2. In lowering patterns, use registry.call() to emit shim invocations.
+//   3. For JIT execution, call registerCudaShimSymbols() on the
+//      ExecutionEngine before invoking the compiled module.
+//
+//===----------------------------------------------------------------------===//
+
+#ifndef TOY_CUDA_SHIM_BUILDER_H
+#define TOY_CUDA_SHIM_BUILDER_H
+
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Operation.h"
@@ -5,6 +70,7 @@
 #include "mlir/IR/TypeRange.h"
 #include "mlir/IR/Value.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/StringRef.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -57,11 +123,83 @@ enum class CudaShimFn {
   CtxSynchronize
 };
 
+static llvm::DenseMap<CudaShimFn, llvm::StringRef> CudaShimFnNames = {
+    {CudaShimFn::LoadModuleFromImage, "cuda_shim_load_module_from_image"},
+    {CudaShimFn::LoadModuleFromFile, "cuda_shim_load_module_from_file"},
+    {CudaShimFn::UnloadModule, "cuda_shim_unload_module"},
+    {CudaShimFn::Malloc, "cuda_shim_malloc"},
+    {CudaShimFn::Free, "cuda_shim_free"},
+    {CudaShimFn::MemcpyH2D, "cuda_shim_memcpy_h2d"},
+    {CudaShimFn::MemcpyD2H, "cuda_shim_memcpy_d2h"},
+    {CudaShimFn::StreamCreate, "cuda_shim_stream_create"},
+    {CudaShimFn::StreamDestroy, "cuda_shim_stream_destroy"},
+    {CudaShimFn::StreamSynchronize, "cuda_shim_stream_synchronize"},
+    {CudaShimFn::LaunchPacked, "cuda_shim_launch_packed"},
+    {CudaShimFn::LaunchBlockPacked, "cuda_shim_launch_block_packed"},
+    {CudaShimFn::CtxSynchronize, "cuda_shim_ctx_synchronize"},
+};
+
+static llvm::DenseMap<CudaShimFn, llvm::StringRef> CudaShimFnType = {
+    {CudaShimFn::LoadModuleFromImage, "i64, i64 -> i64"},
+    {CudaShimFn::LoadModuleFromFile, "i64, i64 -> i64"},
+    {CudaShimFn::UnloadModule, "i64"},
+    {CudaShimFn::Malloc, "i64, i64, i1 -> i64"},
+    {CudaShimFn::Free, "i64, i64"},
+    {CudaShimFn::MemcpyH2D, "i64, i64, i64"},
+    {CudaShimFn::MemcpyD2H, "i64, i64, i64"},
+    {CudaShimFn::StreamCreate, " -> i64"},
+    {CudaShimFn::StreamDestroy, "i64"},
+    {CudaShimFn::StreamSynchronize, "i64"},
+    {CudaShimFn::LaunchPacked, "i64, i64, i32, i32, i32, i64, i64, i64, i32"},
+    {CudaShimFn::LaunchBlockPacked,
+     "i64, i64, i32, i32, i32, i64, i64, i64, i32"},
+    {CudaShimFn::CtxSynchronize, "i64"},
+};
+
+static llvm::SmallVector<mlir::Type>
+parseTypeList(mlir::OpBuilder &rewriter, llvm::StringRef typeListStr) {
+  llvm::SmallVector<mlir::Type> types;
+  for (auto typeStr : llvm::split(typeListStr, ',')) {
+    typeStr = typeStr.trim();
+    if (typeStr == "i64") {
+      types.push_back(rewriter.getI64Type());
+    } else if (typeStr == "i32") {
+      types.push_back(rewriter.getI32Type());
+    } else if (typeStr == "i1") {
+      types.push_back(rewriter.getI1Type());
+    } else {
+      llvm_unreachable("Unsupported type in CudaShimFnType");
+    }
+  }
+  return types;
+}
+
+static mlir::FunctionType
+getFunctionTypeForCudaShimFn(mlir::OpBuilder &rewriter,
+                             llvm::StringRef description) {
+  auto i64 = rewriter.getI64Type();
+  auto i32 = rewriter.getI32Type();
+  auto i1 = rewriter.getI1Type();
+  auto io = description.split("->");
+  io.first = io.first.trim();
+  io.second = io.second.trim();
+  if (io.first.empty() && io.second.empty()) {
+    return rewriter.getFunctionType({}, {});
+  } else if (io.first.empty()) {
+    return rewriter.getFunctionType({}, parseTypeList(rewriter, io.second));
+  } else if (io.second.empty()) {
+    return rewriter.getFunctionType(parseTypeList(rewriter, io.first), {});
+  } else {
+    return rewriter.getFunctionType(parseTypeList(rewriter, io.first),
+                                    parseTypeList(rewriter, io.second));
+  }
+}
+
 class CudaShimRegistry {
 public:
   explicit CudaShimRegistry(mlir::ModuleOp module) : module(module) {}
 
-  mlir::func::FuncOp getOrInsert(mlir::PatternRewriter &rewriter,
+  mlir::func::FuncOp getOrInsert(mlir::OpBuilder &rewriter,
                                  mlir::Operation *anchor, CudaShimFn which) {
     auto key = static_cast<unsigned>(which);
     if (auto it = cache.find(key); it != cache.end())
@@ -84,9 +222,8 @@ public:
     return f;
   }
 
-  mlir::func::CallOp call(mlir::PatternRewriter &rewriter,
-                          mlir::Operation *anchor, CudaShimFn which,
-                          mlir::ValueRange operands = {}) {
+  mlir::func::CallOp call(mlir::OpBuilder &rewriter, mlir::Operation *anchor,
+                          CudaShimFn which, mlir::ValueRange operands = {}) {
     auto f = getOrInsert(rewriter, anchor, which);
 
     return mlir::func::CallOp::create(rewriter, anchor->getLoc(), f.getName(),
@@ -100,117 +237,122 @@ private:
     mlir::FunctionType ty;
   };
 
-  static Spec specOf(CudaShimFn which, mlir::PatternRewriter &rewriter) {
-    auto i64 = rewriter.getI64Type();
-    auto i32 = rewriter.getI32Type();
-    auto i1 = rewriter.getI1Type();
+  static Spec specOf(CudaShimFn which, mlir::OpBuilder &rewriter) {
+    return {CudaShimFnNames[which],
+            getFunctionTypeForCudaShimFn(rewriter, CudaShimFnType[which])};
+    //   auto i64 = rewriter.getI64Type();
+    //   auto i32 = rewriter.getI32Type();
+    //   auto i1 = rewriter.getI1Type();
 
-    switch (which) {
+    //   switch (which) {
 
-    // ===== Module =====
-    case CudaShimFn::LoadModuleFromImage:
-      return {"cuda_shim_load_module_from_image",
-              rewriter.getFunctionType({i64, i64}, {i64})};
+    //   // ===== Module =====
+    //   case CudaShimFn::LoadModuleFromImage:
+    //     return {CudaShimFnNames[which],
+    //             rewriter.getFunctionType({i64, i64}, {i64})};
 
-    case CudaShimFn::LoadModuleFromFile:
-      return {"cuda_shim_load_module_from_file",
-              rewriter.getFunctionType({i64, i64}, {i64})};
+    //   case CudaShimFn::LoadModuleFromFile:
+    //     return {CudaShimFnNames[which],
+    //             rewriter.getFunctionType({i64, i64}, {i64})};
 
-    case CudaShimFn::UnloadModule:
-      return {"cuda_shim_unload_module", rewriter.getFunctionType({i64}, {})};
+    //   case CudaShimFn::UnloadModule:
+    //     return {CudaShimFnNames[which], rewriter.getFunctionType({i64}, {})};
 
-    // ===== Memory =====
-    case CudaShimFn::Malloc:
-      return {"cuda_shim_malloc",
-              rewriter.getFunctionType({i64, i64, i1}, {i64})};
+    //   // ===== Memory =====
+    //   case CudaShimFn::Malloc:
+    //     return {CudaShimFnNames[which],
+    //             rewriter.getFunctionType({i64, i64, i1}, {i64})};
 
-    case CudaShimFn::Free:
-      return {"cuda_shim_free", rewriter.getFunctionType({i64, i64}, {})};
+    //   case CudaShimFn::Free:
+    //     return {CudaShimFnNames[which], rewriter.getFunctionType({i64, i64},
+    //     {})};
 
-      // case CudaShimFn::Memset32:
-      //   return {"cuda_shim_memset32",
-      //           rewriter.getFunctionType({i64, i32, i64, i64}, {})};
+    //     // case CudaShimFn::Memset32:
+    //     //   return {"cuda_shim_memset32",
+    //     //           rewriter.getFunctionType({i64, i32, i64, i64}, {})};
 
-      // case CudaShimFn::Memset16:
-      //   return {"cuda_shim_memset16",
-      //           rewriter.getFunctionType({i64, i32, i64, i64}, {})};
+    //     // case CudaShimFn::Memset16:
+    //     //   return {"cuda_shim_memset16",
+    //     //           rewriter.getFunctionType({i64, i32, i64, i64}, {})};
 
-    case CudaShimFn::MemcpyH2D:
-      return {"cuda_shim_memcpy_h2d",
-              rewriter.getFunctionType({i64, i64, i64}, {})};
+    //   case CudaShimFn::MemcpyH2D:
+    //     return {CudaShimFnNames[which],
+    //             rewriter.getFunctionType({i64, i64, i64}, {})};
 
-    case CudaShimFn::MemcpyD2H:
-      return {"cuda_shim_memcpy_d2h",
-              rewriter.getFunctionType({i64, i64, i64}, {})};
+    //   case CudaShimFn::MemcpyD2H:
+    //     return {CudaShimFnNames[which],
+    //             rewriter.getFunctionType({i64, i64, i64}, {})};
 
-    // ===== Stream =====
-    case CudaShimFn::StreamCreate:
-      return {"cuda_shim_stream_create", rewriter.getFunctionType({}, {i64})};
+    //   // ===== Stream =====
+    //   case CudaShimFn::StreamCreate:
+    //     return {CudaShimFnNames[which], rewriter.getFunctionType({}, {i64})};
 
-    case CudaShimFn::StreamDestroy:
-      return {"cuda_shim_stream_destroy", rewriter.getFunctionType({i64}, {})};
+    //   case CudaShimFn::StreamDestroy:
+    //     return {CudaShimFnNames[which], rewriter.getFunctionType({i64}, {})};
 
-    case CudaShimFn::StreamSynchronize:
-      return {"cuda_shim_stream_synchronize",
-              rewriter.getFunctionType({i64}, {})};
+    //   case CudaShimFn::StreamSynchronize:
+    //     return {CudaShimFnNames[which],
+    //             rewriter.getFunctionType({i64}, {})};
 
-    // case CudaShimFn::StreamWaitEvent:
-    //   return {"cuda_shim_stream_wait_event",
-    //           rewriter.getFunctionType({i64, i64}, {})};
+    //   // case CudaShimFn::StreamWaitEvent:
+    //   //   return {"cuda_shim_stream_wait_event",
+    //   //           rewriter.getFunctionType({i64, i64}, {})};
 
-    // ===== Event =====
-    // case CudaShimFn::EventCreate:
-    //   return {"cuda_shim_event_create", rewriter.getFunctionType({}, {i64})};
+    //   // ===== Event =====
+    //   // case CudaShimFn::EventCreate:
+    //   //   return {"cuda_shim_event_create", rewriter.getFunctionType({},
+    //   {i64})};
 
-    // case CudaShimFn::EventDestroy:
-    //   return {"cuda_shim_event_destroy", rewriter.getFunctionType({i64},
-    //   {})};
+    //   // case CudaShimFn::EventDestroy:
+    //   //   return {"cuda_shim_event_destroy", rewriter.getFunctionType({i64},
+    //   //   {})};
 
-    // case CudaShimFn::EventRecord:
-    //   return {"cuda_shim_event_record",
-    //           rewriter.getFunctionType({i64, i64}, {})};
+    //   // case CudaShimFn::EventRecord:
+    //   //   return {"cuda_shim_event_record",
+    //   //           rewriter.getFunctionType({i64, i64}, {})};
 
-    // case CudaShimFn::EventSynchronize:
-    //   return {"cuda_shim_event_synchronize",
-    //           rewriter.getFunctionType({i64}, {})};
+    //   // case CudaShimFn::EventSynchronize:
+    //   //   return {"cuda_shim_event_synchronize",
+    //   //           rewriter.getFunctionType({i64}, {})};
 
-    // ===== Launch =====
-    case CudaShimFn::LaunchPacked:
-      return {"cuda_shim_launch_packed",
-              rewriter.getFunctionType(
-                  {
-                      i64,           // module_handle
-                      i64,           // kernel_name_ptr
-                      i32, i32, i32, // grid
-                      i32, i32, i32, // block
-                      i32,           // sharedMemBytes
-                      i64,           // stream
-                      i64,           // arg_data_ptr
-                      i64,           // arg_sizes_ptr
-                      i32            // num_args
-                  },
-                  {})};
+    //   // ===== Launch =====
+    //   case CudaShimFn::LaunchPacked:
+    //     return {"cuda_shim_launch_packed",
+    //             rewriter.getFunctionType(
+    //                 {
+    //                     i64,           // module_handle
+    //                     i64,           // kernel_name_ptr
+    //                     i32, i32, i32, // grid
+    //                     i32, i32, i32, // block
+    //                     i32,           // sharedMemBytes
+    //                     i64,           // stream
+    //                     i64,           // arg_data_ptr
+    //                     i64,           // arg_sizes_ptr
+    //                     i32            // num_args
+    //                 },
+    //                 {})};
 
-    case CudaShimFn::LaunchBlockPacked:
-      return {"cuda_shim_launch_block_packed",
-              rewriter.getFunctionType(
-                  {
-                      i64,           // module_handle
-                      i64,           // kernel_name_ptr
-                      i32, i32, i32, // block
-                      i64,           // stream
-                      i64,           // arg_data_ptr
-                      i64,           // arg_sizes_ptr
-                      i32            // num_args
-                  },
-                  {})};
+    //   case CudaShimFn::LaunchBlockPacked:
+    //     return {"cuda_shim_launch_block_packed",
+    //             rewriter.getFunctionType(
+    //                 {
+    //                     i64,           // module_handle
+    //                     i64,           // kernel_name_ptr
+    //                     i32, i32, i32, // block
+    //                     i64,           // stream
+    //                     i64,           // arg_data_ptr
+    //                     i64,           // arg_sizes_ptr
+    //                     i32            // num_args
+    //                 },
+    //                 {})};
 
-    // ===== Context =====
-    case CudaShimFn::CtxSynchronize:
-      return {"cuda_shim_ctx_synchronize", rewriter.getFunctionType({}, {})};
-    }
+    //   // ===== Context =====
+    //   case CudaShimFn::CtxSynchronize:
+    //     return {"cuda_shim_ctx_synchronize", rewriter.getFunctionType({},
+    //     {})};
+    //   }
 
-    llvm_unreachable("Unhandled CudaShimFn");
+    //   llvm_unreachable("Unhandled CudaShimFn");
   }
 
   mlir::ModuleOp module;
@@ -218,7 +360,7 @@ private:
 };
 
 inline mlir::memref::GlobalOp
-createGlobalForStringAttr(mlir::PatternRewriter &rewriter, mlir::Operation *op,
+createGlobalForStringAttr(mlir::OpBuilder &rewriter, mlir::Operation *op,
                           llvm::StringRef sym_name, mlir::StringAttr attr) {
   auto loc = op->getLoc();
   auto moduleOp = op->getParentOfType<mlir::ModuleOp>();
@@ -254,9 +396,9 @@ createGlobalForStringAttr(mlir::PatternRewriter &rewriter, mlir::Operation *op,
   return global;
 }
 
-inline mlir::arith::IndexCastOp
-getIndexFromValue(mlir::PatternRewriter &rewriter, mlir::Location loc,
-                  mlir::Value value) {
+inline mlir::arith::IndexCastOp getIndexFromValue(mlir::OpBuilder &rewriter,
+                                                  mlir::Location loc,
+                                                  mlir::Value value) {
   auto extractOp = mlir::memref::ExtractAlignedPointerAsIndexOp::create(
       rewriter, loc, rewriter.getIndexType(), value);
   auto indexCastOp = mlir::arith::IndexCastOp::create(
@@ -265,7 +407,7 @@ getIndexFromValue(mlir::PatternRewriter &rewriter, mlir::Location loc,
 }
 
 inline mlir::arith::IndexCastOp
-getIndexFromGlobalMemref(mlir::PatternRewriter &rewriter, mlir::Location loc,
+getIndexFromGlobalMemref(mlir::OpBuilder &rewriter, mlir::Location loc,
                          mlir::memref::GlobalOp global) {
 
   auto getGlobalOp = mlir::memref::GetGlobalOp::create(
@@ -275,9 +417,9 @@ getIndexFromGlobalMemref(mlir::PatternRewriter &rewriter, mlir::Location loc,
 }
 
 inline mlir::func::CallOp createCallToCudaShimMalloc(
-    mlir::PatternRewriter &rewriter, mlir::Location loc,
-    CudaShimRegistry &registry, mlir::func::CallOp stream,
-    mlir::arith::ConstantIntOp nbytesVal, bool isHostShared) {
+    mlir::OpBuilder &rewriter, mlir::Location loc, CudaShimRegistry &registry,
+    mlir::func::CallOp stream, mlir::arith::ConstantIntOp nbytesVal,
+    bool isHostShared) {
   mlir::arith::ConstantIntOp isHostSharedVal;
   if (isHostShared) {
     isHostSharedVal = mlir::arith::ConstantIntOp::create(rewriter, loc, 1, 1);
@@ -428,3 +570,5 @@ static inline void registerCudaShimSymbols(mlir::ExecutionEngine &engine) {
     return buildCudaShimSymbolMap(interner);
   });
 }
+
+#endif // TOY_CUDA_SHIM_BUILDER_H

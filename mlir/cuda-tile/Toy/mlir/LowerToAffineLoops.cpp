@@ -30,8 +30,10 @@
 #include "mlir/Support/TypeID.h"
 #include "toy/Dialect.h"
 #include "toy/Passes.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/Support/DebugLog.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
@@ -397,7 +399,51 @@ struct MatMulOpLowering : public ConversionPattern {
   }
 };
 
-struct LanchGpuLowering : public OpConversionPattern<toy::LaunchGpuOp> {
+//===----------------------------------------------------------------------===//
+// ToyToAffine RewritePatterns: LaunchGpu operations
+//===----------------------------------------------------------------------===//
+
+static FailureOr<Value> lookupSharedModule(toy::LaunchGpuOp launch,
+                                           StringAttr binaryPath) {
+  auto func = launch->getParentOfType<func::FuncOp>();
+  for (Operation &op : func.front()) {
+    auto call = dyn_cast<func::CallOp>(op);
+    if (!call ||
+        call.getCallee() != CudaShimFnNames[CudaShimFn::LoadModuleFromFile] ||
+        !call->hasAttr("toy.cuda.binary_path"))
+      continue;
+
+    auto pathAttr = call->getAttrOfType<StringAttr>("toy.cuda.binary_path");
+    if (!pathAttr)
+      continue;
+
+    if (pathAttr == binaryPath)
+      return call.getResult(0);
+  }
+  return failure();
+}
+
+static FailureOr<func::CallOp> lookupSharedStream(toy::LaunchGpuOp launch,
+                                                  StringAttr binaryPath) {
+  auto func = launch->getParentOfType<func::FuncOp>();
+  for (Operation &op : func.front()) {
+    auto call = dyn_cast<func::CallOp>(op);
+    if (!call ||
+        call.getCallee() != CudaShimFnNames[CudaShimFn::StreamCreate] ||
+        !call->hasAttr("toy.cuda.binary_path"))
+      continue;
+
+    auto pathAttr = call->getAttrOfType<StringAttr>("toy.cuda.binary_path");
+    if (!pathAttr)
+      continue;
+
+    if (pathAttr == binaryPath)
+      return call;
+  }
+  return failure();
+}
+
+struct LaunchGpuLowering : public OpConversionPattern<toy::LaunchGpuOp> {
   using OpConversionPattern<toy::LaunchGpuOp>::OpConversionPattern;
 
   LogicalResult
@@ -454,36 +500,51 @@ struct LanchGpuLowering : public OpConversionPattern<toy::LaunchGpuOp> {
           launchGpuOp, "expected 'cuda_binary_path' attribute to be a string");
     }
 
-    // add the global memref for the cuda binary path and the kernel name.
-    auto cuda_blob_memref = createGlobalForStringAttr(
-        rewriter, launchGpuOp, "cuda_blob", cudaBinaryPathStr);
+    // // add the global memref for the cuda binary path and the kernel name.
+    // auto cuda_blob_memref = createGlobalForStringAttr(
+    //     rewriter, launchGpuOp, "cuda_blob", cudaBinaryPathStr);
 
     auto kernelName = launchGpuOp.getCallee();
 
     auto kernel_name_memref = createGlobalForStringAttr(
-        rewriter, launchGpuOp, "kname", rewriter.getStringAttr(kernelName));
+        rewriter, launchGpuOp, kernelName, rewriter.getStringAttr(kernelName));
 
-    // load the cuda binary path from the global memref.
-    auto cuda_blob_index =
-        getIndexFromGlobalMemref(rewriter, loc, cuda_blob_memref);
+    // // load the cuda binary path from the global memref.
+    // auto cuda_blob_index =
+    //     getIndexFromGlobalMemref(rewriter, loc, cuda_blob_memref);
+
     auto kname_loaded_index =
         getIndexFromGlobalMemref(rewriter, loc, kernel_name_memref);
 
-    // Added blob size.
-    auto blob_size =
-        llvm::cast<MemRefType>(cuda_blob_memref.getType()).getShape()[0];
-    auto blob_size_index =
-        arith::ConstantIntOp::create(rewriter, loc, blob_size, 64);
+    // // Added blob size.
+    // auto blob_size =
+    //     llvm::cast<MemRefType>(cuda_blob_memref.getType()).getShape()[0];
+    // auto blob_size_index =
+    //     arith::ConstantIntOp::create(rewriter, loc, blob_size, 64);
 
-    // create a call to the cuda shim function to load the cuda binary
-    auto load_cubin_callee =
-        registry.call(rewriter, launchGpuOp, CudaShimFn::LoadModuleFromFile,
-                      ValueRange{cuda_blob_index, blob_size_index});
+    // // create a call to the cuda shim function to load the cuda binary
+    // auto load_cubin_callee =
+    //     registry.call(rewriter, launchGpuOp, CudaShimFn::LoadModuleFromFile,
+    //                   ValueRange{cuda_blob_index, blob_size_index});
+    auto load_cubin_callee = lookupSharedModule(launchGpuOp, cudaBinaryPathStr);
+    if (failed(load_cubin_callee)) {
+      return rewriter.notifyMatchFailure(
+          launchGpuOp,
+          "failed to find shared module for the given binary path");
+    }
+    Value moduleHandle = *load_cubin_callee;
 
     // create a stream for the kernel launch, for simplicity we use the default
     // stream (0).
-    auto stream =
-        registry.call(rewriter, launchGpuOp, CudaShimFn::StreamCreate);
+    // auto stream =
+    //     registry.call(rewriter, launchGpuOp, CudaShimFn::StreamCreate);
+    auto stream = lookupSharedStream(launchGpuOp, cudaBinaryPathStr);
+    if (failed(stream)) {
+      return rewriter.notifyMatchFailure(
+          launchGpuOp,
+          "failed to find shared stream for the given binary path");
+    }
+    func::CallOp streamCall = *stream;
 
     // we assume the number of output tensors is only 1, and it's the last
     // operand of the launch op.
@@ -494,7 +555,7 @@ struct LanchGpuLowering : public OpConversionPattern<toy::LaunchGpuOp> {
       cudaAllInputs.push_back(operand);
     }
     cudaAllInputs.push_back(outputTensorAlloc);
-    mlir::func::CallOp memcpyH2DCall;
+    mlir::func::CallOp memcpyD2HCall;
 
     // ---------- Build argSlots / argSizes from host side ----------
     auto argSlots =
@@ -511,7 +572,7 @@ struct LanchGpuLowering : public OpConversionPattern<toy::LaunchGpuOp> {
       auto nbytes = getNbytes(opr.getType());
       auto nbytesVal = arith::ConstantIntOp::create(rewriter, loc, nbytes, 64);
       auto device_ptr_callOp = createCallToCudaShimMalloc(
-          rewriter, loc, registry, stream, nbytesVal, false);
+          rewriter, loc, registry, streamCall, nbytesVal, false);
 
       devicePtrs.push_back(device_ptr_callOp.getResult(0));
 
@@ -525,7 +586,7 @@ struct LanchGpuLowering : public OpConversionPattern<toy::LaunchGpuOp> {
         // this is the output tensor, we will add memcpy from device to host for
         // it after the kernel launch. and we will move this to the end of lanch
         // kernel later.
-        memcpyH2DCall = registry.call(
+        memcpyD2HCall = registry.call(
             rewriter, launchGpuOp, CudaShimFn::MemcpyD2H,
             ValueRange{host_ptr, device_ptr_callOp.getResult(0), nbytesVal});
       }
@@ -589,16 +650,15 @@ struct LanchGpuLowering : public OpConversionPattern<toy::LaunchGpuOp> {
 
     // create a call to the cuda shim function to launch the kernel.
     registry.call(rewriter, launchGpuOp, CudaShimFn::LaunchBlockPacked,
-                  ValueRange{load_cubin_callee.getResult(0), kname_loaded_index,
-                             blockXVal, blockYVal, blockZVal,
-                             stream.getResult(0), argSlotPtr, argSizePtr,
-                             numArgsVal});
+                  ValueRange{moduleHandle, kname_loaded_index, blockXVal,
+                             blockYVal, blockZVal, streamCall.getResult(0),
+                             argSlotPtr, argSizePtr, numArgsVal});
 
     auto sync =
         registry.call(rewriter, launchGpuOp, CudaShimFn::StreamSynchronize,
-                      ValueRange{stream.getResult(0)});
+                      ValueRange{streamCall.getResult(0)});
 
-    memcpyH2DCall->moveAfter(sync);
+    memcpyD2HCall->moveAfter(sync);
 
     // add free after the kernel launch.
     memref::DeallocOp::create(rewriter, loc, argSlots);
@@ -606,14 +666,14 @@ struct LanchGpuLowering : public OpConversionPattern<toy::LaunchGpuOp> {
 
     for (auto operand : llvm::reverse(devicePtrs)) {
       registry.call(rewriter, launchGpuOp, CudaShimFn::Free,
-                    ValueRange{operand, stream.getResult(0)});
+                    ValueRange{operand, streamCall.getResult(0)});
     }
 
-    // clean up
-    registry.call(rewriter, launchGpuOp, CudaShimFn::StreamDestroy,
-                  ValueRange{stream.getResult(0)});
-    registry.call(rewriter, launchGpuOp, CudaShimFn::UnloadModule,
-                  ValueRange{load_cubin_callee.getResult(0)});
+    // // clean up
+    // registry.call(rewriter, launchGpuOp, CudaShimFn::StreamDestroy,
+    //               ValueRange{streamCall.getResult(0)});
+    // registry.call(rewriter, launchGpuOp, CudaShimFn::UnloadModule,
+    //               ValueRange{moduleHandle});
 
     rewriter.replaceOp(launchGpuOp, outputTensorAlloc);
     return success();
@@ -672,7 +732,7 @@ void ToyToAffineLoweringPass::runOnOperation() {
   RewritePatternSet patterns(&getContext());
   patterns.add<AddOpLowering, ConstantOpLowering, FuncOpLowering, MulOpLowering,
                PrintOpLowering, ReturnOpLowering, TransposeOpLowering,
-               MatMulOpLowering, LanchGpuLowering>(&getContext());
+               MatMulOpLowering, LaunchGpuLowering>(&getContext());
 
   // With the target and rewrite patterns defined, we can now attempt the
   // conversion. The conversion will signal failure if any of our `illegal`
@@ -680,6 +740,109 @@ void ToyToAffineLoweringPass::runOnOperation() {
   if (failed(
           applyPartialConversion(getOperation(), target, std::move(patterns))))
     signalPassFailure();
+}
+
+class CudaLaunchAnalysis {
+public:
+  struct FuncPlan {
+    bool hasLaunch = false;
+    bool useSharedStream = false;
+    llvm::SmallVector<std::string> uniqueBinaryPaths;
+    llvm::DenseMap<Operation *, std::string> launchToBinaryPath;
+  };
+
+  explicit CudaLaunchAnalysis(toy::FuncOp func) {
+    llvm::StringSet<> seen;
+
+    func.walk([&](toy::LaunchGpuOp op) {
+      plan.hasLaunch = true;
+      plan.useSharedStream = true;
+
+      auto pathAttr = op->getAttrOfType<StringAttr>("cuda_binary_path");
+      if (!pathAttr)
+        return;
+
+      std::string path = pathAttr.str();
+      plan.launchToBinaryPath[op.getOperation()] = path;
+
+      if (seen.insert(path).second)
+        plan.uniqueBinaryPaths.push_back(path);
+    });
+  }
+
+  const FuncPlan &getPlan() const { return plan; }
+
+private:
+  FuncPlan plan;
+};
+
+struct PrepareCudaResourcesPass
+    : public PassWrapper<PrepareCudaResourcesPass, OperationPass<toy::FuncOp>> {
+
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(PrepareCudaResourcesPass)
+  StringRef getArgument() const override { return "prepare-cuda-resources"; }
+
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<affine::AffineDialect, func::FuncDialect,
+                    memref::MemRefDialect>();
+  }
+
+  void runOnOperation() override {
+    toy::FuncOp func = getOperation();
+    auto &analysis = getAnalysis<CudaLaunchAnalysis>();
+    const auto &plan = analysis.getPlan();
+
+    if (!plan.hasLaunch)
+      return;
+
+    MLIRContext *ctx = &getContext();
+    IRRewriter rewriter(ctx);
+    CudaShimRegistry registry(func->getParentOfType<ModuleOp>());
+
+    OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPointToStart(&func.front());
+
+    // 插 shared modules
+    for (const std::string &path : plan.uniqueBinaryPaths) {
+      auto pathAttr = rewriter.getStringAttr(path);
+
+      auto blobMemref =
+          createGlobalForStringAttr(rewriter, func, "cuda_blob", pathAttr);
+      auto blobPtr =
+          getIndexFromGlobalMemref(rewriter, func.getLoc(), blobMemref);
+
+      auto blobSize = cast<MemRefType>(blobMemref.getType()).getShape()[0];
+      auto blobSizeVal =
+          arith::ConstantIntOp::create(rewriter, func.getLoc(), blobSize, 64);
+
+      auto moduleCall =
+          registry.call(rewriter, func, CudaShimFn::LoadModuleFromFile,
+                        ValueRange{blobPtr, blobSizeVal});
+
+      auto streamCall = registry.call(rewriter, func, CudaShimFn::StreamCreate);
+      streamCall->setAttr("toy.cuda.binary_path", pathAttr);
+
+      moduleCall->setAttr("toy.cuda.binary_path", pathAttr);
+
+      // we will clean up the resources in the end of the main function,
+      // so we need to mark the stream and module handle as shared
+      // resources which will be cleaned up in the end of main function.
+      auto streamDestroyCall =
+          registry.call(rewriter, func, CudaShimFn::StreamDestroy,
+                        ValueRange{streamCall.getResult(0)});
+
+      streamDestroyCall->moveBefore(&func.front().back());
+
+      auto moduleDestroyCall =
+          registry.call(rewriter, func, CudaShimFn::UnloadModule,
+                        ValueRange{moduleCall.getResult(0)});
+      moduleDestroyCall->moveBefore(&func.front().back());
+    }
+  }
+};
+
+std::unique_ptr<Pass> mlir::toy::createPrepareCudaResourcesPass() {
+  return std::make_unique<PrepareCudaResourcesPass>();
 }
 
 /// Create a pass for lowering operations in the `Affine` and `Std` dialects,
