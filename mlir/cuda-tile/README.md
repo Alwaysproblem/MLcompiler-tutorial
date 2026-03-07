@@ -1,4 +1,4 @@
-# Standalone environment for MLIR tutorial.
+# Standalone environment for MLIR tutorial
 
 **NB: The code of this tutorial is from the [mlir-Toy-Example-tutorial](https://mlir.llvm.org/docs/Tutorials/Toy/Ch-1/) and [mlir-transform-tutorial](https://mlir.llvm.org/docs/Tutorials/transform/).
 This repo only provide a simple way to setting up the environment. The toy file used in mlir-example all be in [example directory](../example/) and `Ch1-Ch7` is the Toy tutorial example code `Ch8` is an naive example to add `toy.matmul` operation and `transform_Ch2-H` is for transform dialect tutorials**
@@ -67,13 +67,13 @@ compdb -p build list > compile_commands.json
 > Note: if you want to run the toy-cuda example on the cuda < 13.x, you need to write you own cuda kernel.
 > The cuda tile dialect is only supported on cuda 13.x and above, and the generated kernel is only compatible with cuda 13.x and above.
 >
-> So, I do the testing with the source code `cuda_shim/outlined_gpu_kernel.cu` 
+> So, I do the testing with the source code `cuda_shim/outlined_gpu_kernel.cu`
 > compiled with `nvcc` with `-arch=sm_80` and `--cubin` flag to generate the cubin file under the cuda 12.x,
 > and then load the cubin file in the runtime.
 > please mv the generated `cuda_tile.bin` to `/tmp/cuda_tile-94d280.bin` before you run the example.
 >
 > `cp cuda_shim/cuda_tile.cubin /tmp/cuda_tile-94d280.bin`
-> 
+>
 > warning: if you are not using the `-use-cache` option, it will delete the `cuda_tile.bin` after the execution,
 > so please backup it before you run the example.
 
@@ -368,8 +368,12 @@ compdb -p build list > compile_commands.json
 
 ```bash
 ./build/Toy/toy-cuda sample/matmul.toy -emit=nv-gpu-jit --grid 8,1,1 -opt -use-cache
-The GPU related actions will be used
-Grid dimensions: 8,1,1
-84.000000 112.000000 144.000000 299.000000
-190.000000 231.000000 276.000000 392.000000
+# The GPU related actions will be used
+# Grid dimensions: 8,1,1
+# 22.000000 36.000000 52.000000 140.000000
+# 75.000000 96.000000 119.000000 198.000000
+# 200.000000 260.000000
+# 322.000000 422.000000
+# 84.000000 112.000000 144.000000 299.000000
+# 190.000000 231.000000 276.000000 392.000000
 ```
