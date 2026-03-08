@@ -505,13 +505,16 @@ extern "C" void cuda_shim_launch_packed(
 
 // Convenience: 1D launch, shared=0, stream optional
 extern "C" void
-cuda_shim_launch_block_packed(uint64_t module_handle, uint64_t kernel_name_ptr,
-                              uint32_t blockX, uint32_t blockY, uint32_t blockZ,
-                              uint64_t stream, uint64_t arg_data_ptr,
-                              uint64_t arg_sizes_ptr, uint32_t num_args) {
-  cuda_shim_launch_packed(module_handle, kernel_name_ptr, 1, 1, 1, blockX,
-                          blockY, blockZ, 0, stream, arg_data_ptr,
-                          arg_sizes_ptr, num_args);
+cuda_shim_launch_grid_packed(uint64_t module_handle, uint64_t kernel_name_ptr,
+                             uint32_t gridX, uint32_t gridY, uint32_t gridZ,
+                             uint64_t stream, uint64_t arg_data_ptr,
+                             uint64_t arg_sizes_ptr, uint32_t num_args) {
+  cuda_shim_launch_packed(module_handle, kernel_name_ptr, gridX, gridY, gridZ,
+                          1, 1, 1, 0, stream, arg_data_ptr, arg_sizes_ptr,
+                          num_args);
+  // cuda_shim_launch_packed(module_handle, kernel_name_ptr, 1, 1, 1, blockX,
+  //                         blockY, blockZ, 0, stream, arg_data_ptr,
+  //                         arg_sizes_ptr, num_args);
 }
 
 // Optional: global sync (avoid in async pipeline; prefer event/stream sync)

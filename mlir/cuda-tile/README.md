@@ -152,7 +152,7 @@ compdb -p build list > compile_commands.json
 #   func.func private @cuda_shim_stream_destroy(i64)
 #   func.func private @cuda_shim_free(i64, i64)
 #   func.func private @cuda_shim_stream_synchronize(i64)
-#   func.func private @cuda_shim_launch_block_packed(i64, i64, i32, i32, i32, i64, i64, i64, i32)
+#   func.func private @cuda_shim_launch_grid_packed(i64, i64, i32, i32, i32, i64, i64, i64, i32)
 #   func.func private @cuda_shim_memcpy_d2h(i64, i64, i64)
 #   func.func private @cuda_shim_memcpy_h2d(i64, i64, i64)
 #   func.func private @cuda_shim_malloc(i64, i64, i1) -> i64
@@ -255,7 +255,7 @@ compdb -p build list > compile_commands.json
 #     %14 = arith.index_cast %intptr_27 : index to i64
 #     %intptr_28 = memref.extract_aligned_pointer_as_index %alloc_22 : memref<4xi64> -> index
 #     %15 = arith.index_cast %intptr_28 : index to i64
-#     call @cuda_shim_launch_block_packed(%4, %3, %c8_i32, %c1_i32, %c1_i32, %5, %14, %15, %c4_i32) : (i64, i64, i32, i32, i32, i64, i64, i64, i32) -> ()
+#     call @cuda_shim_launch_grid_packed(%4, %3, %c8_i32, %c1_i32, %c1_i32, %5, %14, %15, %c4_i32) : (i64, i64, i32, i32, i32, i64, i64, i64, i32) -> ()
 #     call @cuda_shim_stream_synchronize(%5) : (i64) -> ()
 #     call @cuda_shim_memcpy_d2h(%13, %12, %c32_i64) : (i64, i64, i64) -> ()
 #     memref.dealloc %alloc_21 : memref<4xi64>
@@ -292,7 +292,7 @@ compdb -p build list > compile_commands.json
 #   llvm.func @cuda_shim_stream_destroy(i64) attributes {sym_visibility = "private"}
 #   llvm.func @cuda_shim_free(i64, i64) attributes {sym_visibility = "private"}
 #   llvm.func @cuda_shim_stream_synchronize(i64) attributes {sym_visibility = "private"}
-#   llvm.func @cuda_shim_launch_block_packed(i64, i64, i32, i32, i32, i64, i64, i64, i32) attributes {sym_visibility = "private"}
+#   llvm.func @cuda_shim_launch_grid_packed(i64, i64, i32, i32, i32, i64, i64, i64, i32) attributes {sym_visibility = "private"}
 #   llvm.func @cuda_shim_memcpy_d2h(i64, i64, i64) attributes {sym_visibility = "private"}
 #   llvm.func @cuda_shim_memcpy_h2d(i64, i64, i64) attributes {sym_visibility = "private"}
 #   llvm.func @cuda_shim_malloc(i64, i64, i1) -> i64 attributes {sym_visibility = "private"}
@@ -350,7 +350,7 @@ compdb -p build list > compile_commands.json
 # !10 = !DISubprogram(name: "cuda_shim_stream_destroy", linkageName: "cuda_shim_stream_destroy", scope: !9, file: !9, line: 1, type: !4, scopeLine: 1, spFlags: DISPFlagOptimized)
 # !11 = !DISubprogram(name: "cuda_shim_free", linkageName: "cuda_shim_free", scope: !9, file: !9, line: 1, type: !4, scopeLine: 1, spFlags: DISPFlagOptimized)
 # !12 = !DISubprogram(name: "cuda_shim_stream_synchronize", linkageName: "cuda_shim_stream_synchronize", scope: !9, file: !9, line: 1, type: !4, scopeLine: 1, spFlags: DISPFlagOptimized)
-# !13 = !DISubprogram(name: "cuda_shim_launch_block_packed", linkageName: "cuda_shim_launch_block_packed", scope: !9, file: !9, line: 1, type: !4, scopeLine: 1, spFlags: DISPFlagOptimized)
+# !13 = !DISubprogram(name: "cuda_shim_launch_grid_packed", linkageName: "cuda_shim_launch_grid_packed", scope: !9, file: !9, line: 1, type: !4, scopeLine: 1, spFlags: DISPFlagOptimized)
 # !14 = !DISubprogram(name: "cuda_shim_memcpy_d2h", linkageName: "cuda_shim_memcpy_d2h", scope: !9, file: !9, line: 1, type: !4, scopeLine: 1, spFlags: DISPFlagOptimized)
 # !15 = !DISubprogram(name: "cuda_shim_memcpy_h2d", linkageName: "cuda_shim_memcpy_h2d", scope: !9, file: !9, line: 1, type: !4, scopeLine: 1, spFlags: DISPFlagOptimized)
 # !16 = !DISubprogram(name: "cuda_shim_malloc", linkageName: "cuda_shim_malloc", scope: !9, file: !9, line: 1, type: !4, scopeLine: 1, spFlags: DISPFlagOptimized)

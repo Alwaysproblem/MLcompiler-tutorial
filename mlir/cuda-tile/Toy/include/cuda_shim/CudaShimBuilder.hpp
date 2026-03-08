@@ -135,7 +135,7 @@ static llvm::DenseMap<CudaShimFn, llvm::StringRef> CudaShimFnNames = {
     {CudaShimFn::StreamDestroy, "cuda_shim_stream_destroy"},
     {CudaShimFn::StreamSynchronize, "cuda_shim_stream_synchronize"},
     {CudaShimFn::LaunchPacked, "cuda_shim_launch_packed"},
-    {CudaShimFn::LaunchBlockPacked, "cuda_shim_launch_block_packed"},
+    {CudaShimFn::LaunchBlockPacked, "cuda_shim_launch_grid_packed"},
     {CudaShimFn::CtxSynchronize, "cuda_shim_ctx_synchronize"},
 };
 
@@ -333,7 +333,7 @@ private:
     //                 {})};
 
     //   case CudaShimFn::LaunchBlockPacked:
-    //     return {"cuda_shim_launch_block_packed",
+    //     return {"cuda_shim_launch_grid_packed",
     //             rewriter.getFunctionType(
     //                 {
     //                     i64,           // module_handle
@@ -498,11 +498,11 @@ void cuda_shim_launch_packed(uint64_t module_handle, uint64_t kernel_name_ptr,
                              uint32_t num_args);
 
 // Convenience: 1D launch, shared=0, stream optional
-void cuda_shim_launch_block_packed(uint64_t module_handle,
-                                   uint64_t kernel_name_ptr, uint32_t blockX,
-                                   uint32_t blockY, uint32_t blockZ,
-                                   uint64_t stream, uint64_t arg_data_ptr,
-                                   uint64_t arg_sizes_ptr, uint32_t num_args);
+void cuda_shim_launch_grid_packed(uint64_t module_handle,
+                                  uint64_t kernel_name_ptr, uint32_t blockX,
+                                  uint32_t blockY, uint32_t blockZ,
+                                  uint64_t stream, uint64_t arg_data_ptr,
+                                  uint64_t arg_sizes_ptr, uint32_t num_args);
 
 // Optional: global sync (avoid in async pipeline; prefer event/stream sync)
 void cuda_shim_ctx_synchronize(void);
@@ -560,7 +560,7 @@ buildCudaShimSymbolMap(llvm::orc::MangleAndInterner interner) {
 
   // ---- launch ----
   add("cuda_shim_launch_packed", (void *)&cuda_shim_launch_packed);
-  add("cuda_shim_launch_block_packed", (void *)&cuda_shim_launch_block_packed);
+  add("cuda_shim_launch_grid_packed", (void *)&cuda_shim_launch_grid_packed);
 
   return syms;
 }

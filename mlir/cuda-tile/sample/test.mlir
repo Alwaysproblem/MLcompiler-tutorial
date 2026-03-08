@@ -3,7 +3,7 @@ module {
   func.func private @cuda_shim_stream_destroy(i64)
   func.func private @cuda_shim_free(i64, i64)
   func.func private @cuda_shim_stream_synchronize(i64)
-  func.func private @cuda_shim_launch_block_packed(i64, i64, i32, i32, i32, i64, i64, i64, i32)
+  func.func private @cuda_shim_launch_grid_packed(i64, i64, i32, i32, i32, i64, i64, i64, i32)
   func.func private @cuda_shim_memcpy_d2h(i64, i64, i64)
   func.func private @cuda_shim_memcpy_h2d(i64, i64, i64)
   func.func private @cuda_shim_malloc(i64, i64, i1) -> i64
@@ -135,7 +135,7 @@ module {
     %14 = arith.index_cast %intptr_55 : index to i64
     %intptr_56 = memref.extract_aligned_pointer_as_index %alloc_36 : memref<4xi64> -> index
     %15 = arith.index_cast %intptr_56 : index to i64
-    call @cuda_shim_launch_block_packed(%4, %3, %c8_i32, %c1_i32, %c1_i32_54, %5, %14, %15, %c4_i32) : (i64, i64, i32, i32, i32, i64, i64, i64, i32) -> ()
+    call @cuda_shim_launch_grid_packed(%4, %3, %c8_i32, %c1_i32, %c1_i32_54, %5, %14, %15, %c4_i32) : (i64, i64, i32, i32, i32, i64, i64, i64, i32) -> ()
     call @cuda_shim_stream_synchronize(%5) : (i64) -> ()
     call @cuda_shim_memcpy_d2h(%13, %12, %c32_i64_49) : (i64, i64, i64) -> ()
     memref.dealloc %alloc_35 : memref<4xi64>
