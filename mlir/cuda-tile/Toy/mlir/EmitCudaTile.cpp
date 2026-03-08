@@ -25,9 +25,9 @@ static FailureOr<std::vector<int8_t>> readFileBytes(StringRef path) {
   auto bufOrErr = MemoryBuffer::getFile(path, /*IsText=*/false);
   if (!bufOrErr)
     return failure();
-  auto &buf = *bufOrErr.get();
-  std::vector<int8_t> out(buf.getBufferSize());
-  memcpy(out.data(), buf.getBufferStart(), buf.getBufferSize());
+  auto &buf = *bufOrErr;
+  std::vector<int8_t> out(buf->getBufferSize());
+  memcpy(out.data(), buf->getBufferStart(), buf->getBufferSize());
   return out;
 }
 
