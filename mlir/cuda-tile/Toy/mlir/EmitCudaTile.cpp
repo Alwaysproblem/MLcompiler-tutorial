@@ -203,8 +203,8 @@ struct EmbedCudaTileBinaryPass
       launchOp->setAttr("cuda_binary_size",
                         mlir::IntegerAttr::get(mlir::IntegerType::get(ctx, 64),
                                                binU8Bytes.size()));
-      launchOp->setAttr("cuda_binary_path",
-                        mlir::StringAttr::get(ctx, cudaBinPath.str()));
+      launchOp->setDiscardableAttr(
+          "cuda_binary_path", mlir::StringAttr::get(ctx, cudaBinPath.str()));
       launchOp->setAttr("cuda_arch", mlir::StringAttr::get(ctx, gpuName));
     });
 
