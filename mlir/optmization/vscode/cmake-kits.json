@@ -1,0 +1,13 @@
+[
+  {
+    "name": "GCC in conda",
+    "compilers": {
+      "C": "/usr/bin/gcc",
+      "CXX": "/usr/bin/g++"
+    },
+    "environmentSetupScript": "${workspaceFolder}/.envsetup.sh",
+    "preferredGenerator": {
+      "name": "Ninja"
+    }
+  }
+]
