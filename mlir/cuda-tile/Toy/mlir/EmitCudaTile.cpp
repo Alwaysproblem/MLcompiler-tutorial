@@ -188,24 +188,18 @@ struct EmbedCudaTileBinaryPass
       }
       auto binBytes = *binBytesOrErr;
 
-      // ---- Step E: embed binary as LaunchGpuOp attributes ----
-      llvm::SmallVector<uint8_t, 0> binU8Bytes;
-      binU8Bytes.reserve(binBytes.size());
-      for (auto b : binBytes)
-        binU8Bytes.push_back(static_cast<uint8_t>(b));
+      // ---- Step E: embed binary metadata as LaunchGpuOp attributes ----
+      // Note: we currently only attach metadata (size/path/arch), not the
+      // raw cuda_binary bytes themselves.
 
-      auto byteAttr = mlir::DenseIntElementsAttr::get(
-          mlir::RankedTensorType::get({static_cast<int64_t>(binU8Bytes.size())},
-                                      mlir::IntegerType::get(ctx, 8)),
-          binU8Bytes);
-
-      // launchOp->setAttr("cuda_binary", byteAttr);
-      launchOp->setAttr("cuda_binary_size",
-                        mlir::IntegerAttr::get(mlir::IntegerType::get(ctx, 64),
-                                               binU8Bytes.size()));
+      launchOp->setDiscardableAttr(
+          "cuda_binary_size",
+          mlir::IntegerAttr::get(mlir::IntegerType::get(ctx, 64),
+                                 static_cast<int64_t>(binBytes.size())));
       launchOp->setDiscardableAttr(
           "cuda_binary_path", mlir::StringAttr::get(ctx, cudaBinPath.str()));
-      launchOp->setAttr("cuda_arch", mlir::StringAttr::get(ctx, gpuName));
+      launchOp->setDiscardableAttr("cuda_arch",
+                                   mlir::StringAttr::get(ctx, gpuName));
     });
 
     // ---- Step F: Delete the cuda_tile.module ops ----
