@@ -20,7 +20,7 @@ set -e
 #fi
 
 if [[ -f "/usr/bin/git" ]]; then
-  WORKSPACEROOT=$(git rev-parse --show-toplevel)/mlir/example || WORKSPACEROOT=`pwd`
+  WORKSPACEROOT=$(git rev-parse --show-toplevel)/mlir/optimization || WORKSPACEROOT=`pwd`
 fi
 
 cd ${WORKSPACEROOT}
