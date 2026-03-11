@@ -16,6 +16,8 @@ public:
     int64_t K;
     int64_t flops;
     int64_t bytes;
+    int64_t readBytes;
+    int64_t writeBytes;
     int64_t macs;
     double intensity;
     unsigned numLoops;
@@ -70,6 +72,8 @@ public:
     int64_t aBytes = aType.getNumElements() * elemBytes;
     int64_t bBytes = bType.getNumElements() * elemBytes;
     int64_t cBytes = cType.getNumElements() * elemBytes;
+    int64_t readBytes = aBytes + bBytes - cBytes; // assuming c is read-modify-write
+    int64_t writeBytes = cBytes;
     int64_t totalBytes = aBytes + bBytes + cBytes;
 
     double intensity = totalBytes > 0 ? static_cast<double>(flops) /
@@ -83,6 +87,8 @@ public:
     states.bytes = totalBytes;
     states.macs = totalMacs;
     states.intensity = intensity;
+    states.readBytes = readBytes;
+    states.writeBytes = writeBytes;
   }
 
   void analyzeGeneric(linalg::GenericOp op) {
@@ -114,7 +120,10 @@ struct LabOpStatsPass
 
     func.emitRemark() << "[lab-op-stats] M=" << states.M << " N=" << states.N
                       << " K=" << states.K << " FLOPs=" << states.flops
-                      << " Bytes=" << states.bytes << " MACs=" << states.macs
+                      << " Bytes=" << states.bytes 
+                      << " ReadBytes=" << states.readBytes
+                      << " WriteBytes=" << states.writeBytes
+                      << " MACs=" << states.macs
                       << " Intensity=" << states.intensity
                       << " Loops=" << states.numLoops
                       << " Parallel=" << states.numParallel

@@ -24,6 +24,10 @@ int main(int argc, char **argv) {
                                    [](mlir::OpPassManager &pm) {
                                      pm.addPass(mlir::createLabOpStatsPass());
                                    });
+  mlir::PassPipelineRegistration<>("lab-buffer-stats", "Lab Buffer Stats Pass",
+                                   [](mlir::OpPassManager &pm) {
+                                     pm.addPass(mlir::createLabBufferStatsPass());
+                                   });
 
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "Lab optimizer\n", registry));

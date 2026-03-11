@@ -12,6 +12,7 @@ add_executable(
   lab-scheduler
   lab-opt.cpp
   lib/OpStatsPass.cpp
+  lib/BufferAnalysisPass.cpp
   )
 
 # add_dependencies(lab-scheduler ToyCh6ShapeInferenceInterfaceIncGen
