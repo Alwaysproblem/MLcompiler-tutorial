@@ -1,4 +1,5 @@
 #include "mlir/Analysis/AliasAnalysis.h"
+#include "mlir/Analysis/Liveness.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -90,6 +91,7 @@ public:
     // Step 2: 找 buffer owner，并计算 def/lastUse/size
     func.walk([&](Operation *op) {
       Value result;
+      mlir::Liveness liveness(func);
 
       if (auto allocOp = dyn_cast<memref::AllocOp>(op)) {
         result = allocOp.getResult();
@@ -108,14 +110,22 @@ public:
         return; // 教学版：先跳过动态 shape
 
       int def = opIndex[op];
-      int lastUse = def;
 
-      for (OpOperand &use : result.getUses()) {
-        Operation *user = use.getOwner();
-        auto it = opIndex.find(user);
-        if (it != opIndex.end())
-          lastUse = std::max(lastUse, it->second);
-      }
+      // First version: 直接找最后一个使用点
+      // int lastUse = def;
+
+      // for (OpOperand &use : result.getUses()) {
+      //   Operation *user = use.getOwner();
+      //   auto it = opIndex.find(user);
+      //   if (it != opIndex.end())
+      //     lastUse = std::max(lastUse, it->second);
+      // }
+
+      auto indexOp = findLastSemanticUser(func, liveness, result);
+      if (!indexOp)
+        return; // 没有语义使用点？先跳过
+      int lastUse = opIndex[indexOp];
+
 
       buffers.push_back(BufferRecord{
           result,
@@ -166,6 +176,31 @@ public:
       numElems *= d;
     }
     return numElems * elemBytes;
+  }
+
+  static Operation *findLastSemanticUser(func::FuncOp funcOp,
+                                        mlir::Liveness &liveness,
+                                        Value value) {
+    Operation *lastUser = nullptr;
+
+    funcOp.walk([&](Operation *op) {
+      bool usesValue = false;
+      for (Value operand : op->getOperands()) {
+        if (operand == value) {
+          usesValue = true;
+          break;
+        }
+      }
+      if (!usesValue)
+        return;
+
+      // 如果这个 op 使用了 value，并且 op 之后 value 已死，
+      // 就把它视为“最后语义使用点”的候选。
+      if (liveness.isDeadAfter(value, op))
+        lastUser = op;
+    });
+
+    return lastUser;
   }
 
   static bool isBufferOwner(Value v) {
