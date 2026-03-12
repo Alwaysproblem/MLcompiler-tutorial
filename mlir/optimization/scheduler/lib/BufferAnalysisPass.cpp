@@ -1,13 +1,16 @@
+#include "lab/MemoryPlan.h"
 #include "mlir/Analysis/AliasAnalysis.h"
 #include "mlir/Analysis/Liveness.h"
-#include "mlir/IR/AsmState.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/IR/AsmState.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Interfaces/DataLayoutInterfaces.h"
-#include "llvm/Support/DebugLog.h"
 #include "mlir/Pass/Pass.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/Support/DebugLog.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdint>
 #include <sys/types.h>
@@ -126,7 +129,6 @@ public:
         return; // 没有语义使用点？先跳过
       int lastUse = opIndex[indexOp];
 
-
       buffers.push_back(BufferRecord{
           result,
           *sizeBytes,
@@ -179,8 +181,8 @@ public:
   }
 
   static Operation *findLastSemanticUser(func::FuncOp funcOp,
-                                        mlir::Liveness &liveness,
-                                        Value value) {
+                                         mlir::Liveness &liveness,
+                                         Value value) {
     Operation *lastUser = nullptr;
 
     funcOp.walk([&](Operation *op) {
@@ -216,6 +218,80 @@ private:
   SmallVector<BufferRecord> buffers;
 };
 
+class MemoryPlaner {
+public:
+  explicit MemoryPlaner(
+      const SmallVector<LabBufferStatsAnalysis::BufferRecord> &buffers)
+      : buffers_(buffers.begin(), buffers.end()) {}
+
+  void plan() {
+    llvm::sort(buffers_, [](const LabBufferStatsAnalysis::BufferRecord &a,
+                            const LabBufferStatsAnalysis::BufferRecord &b) {
+      return a.defIndex < b.defIndex;
+    });
+
+    int nextSlotId = 0;
+    int globalSlotOffset = 0;
+    for (const auto &buf : buffers_) {
+      // Try to find a slot for this buffer
+      int64_t offset = 0;
+      bool assigned = false;
+      for (auto &slot : slots_) {
+        if (slot.availableAfter <= buf.defIndex &&
+            slot.sizeBytes >= buf.sizeBytes) {
+          // This slot is available and large enough, assign it to the buffer
+          result_.assignments[buf.value] =
+              MemorySlotAssignment{slot.id, offset};
+          slot.availableAfter = buf.lastUseIndex + 1; // Update availability
+          assigned = true;
+          break;
+        }
+        offset += slot.sizeBytes; // Next buffer in the same slot will be placed
+                                  // after this one
+      }
+      if (!assigned) {
+        // No existing slot can accommodate this buffer, create a new slot
+        Slot newSlot{nextSlotId++, buf.sizeBytes, buf.lastUseIndex + 1};
+        result_.assignments[buf.value] =
+            MemorySlotAssignment{newSlot.id, globalSlotOffset};
+        globalSlotOffset +=
+            newSlot.sizeBytes; // Update offset for the next buffer
+        slots_.push_back(newSlot);
+      }
+    }
+
+    for (const auto &slot : slots_) {
+      result_.totalPoolBytes += slot.sizeBytes;
+    }
+  };
+  const MemoryPlanResult &getPlan() const { return result_; }
+
+  void printPlan(func::FuncOp func) const {
+    llvm::outs() << "Memory Plan:\n";
+    llvm::outs() << "  num_slots=" << slots_.size() << "\n";
+    for (const auto &slot : slots_) {
+      llvm::outs() << "  slot_id=" << slot.id << " size=" << slot.sizeBytes
+                   << "B available_after_op_index=" << slot.availableAfter
+                   << "\n";
+    }
+    for (const auto &entry : result_.assignments) {
+      std::string valueStr;
+      llvm::raw_string_ostream rso(valueStr);
+      AsmState asmState(func);
+      entry.first.printAsOperand(rso, asmState);
+      llvm::outs() << "  value=" << rso.str()
+                   << " -> slot=" << entry.second.slotId
+                   << " offset=" << entry.second.offset << "\n";
+    }
+    llvm::outs() << "  total_pool_bytes=" << result_.totalPoolBytes << "B\n";
+  }
+
+private:
+  SmallVector<LabBufferStatsAnalysis::BufferRecord> buffers_;
+  MemoryPlanResult result_;
+  llvm::SmallVector<Slot> slots_;
+};
+
 struct LabBufferStats
     : public PassWrapper<LabBufferStats, OperationPass<func::FuncOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LabBufferStats)
@@ -241,14 +317,18 @@ struct LabBufferStats
       llvm::raw_string_ostream rso(valueStr);
       AsmState asmState(func);
       buf.value.printAsOperand(rso, asmState);
-      llvm::outs() << "  value=" << rso.str() << " size=" << buf.sizeBytes << "B"
-                   << " def=#" << buf.defIndex
-                   << " last_use=#" << buf.lastUseIndex
-                   << " lifetime=[" << buf.defIndex
-                   << "," << buf.lastUseIndex << "]\n";
+      llvm::outs() << "  value=" << rso.str() << " size=" << buf.sizeBytes
+                   << "B"
+                   << " def=#" << buf.defIndex << " last_use=#"
+                   << buf.lastUseIndex << " lifetime=[" << buf.defIndex << ","
+                   << buf.lastUseIndex << "]\n";
     }
-    llvm::outs() << "  peak_live_memory=" << analysis.getStates().peak_memory << "B\n";
+    llvm::outs() << "  peak_live_memory=" << analysis.getStates().peak_memory
+                 << "B\n";
 
+    MemoryPlaner planer(buffers);
+    planer.plan();
+    planer.printPlan(func);
   }
 };
 } // namespace
