@@ -17,6 +17,7 @@ add_executable(
   lib/MemrefLifetime.cpp
   lib/FusionFeasibility.cpp
   lib/LivenessAdapter.cpp
+  lib/LocalListScheduling.cpp
   )
 
 # add_dependencies(lab-scheduler ToyCh6ShapeInferenceInterfaceIncGen

@@ -1,6 +1,7 @@
 #include "lab/LabPasses.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Async/IR/Async.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -19,7 +20,8 @@ int main(int argc, char **argv) {
   registry.insert<mlir::func::FuncDialect, mlir::linalg::LinalgDialect,
                   mlir::arith::ArithDialect, mlir::tensor::TensorDialect,
                   mlir::memref::MemRefDialect, mlir::scf::SCFDialect,
-                  mlir::affine::AffineDialect, mlir::cf::ControlFlowDialect>();
+                  mlir::affine::AffineDialect, mlir::cf::ControlFlowDialect,
+                  mlir::async::AsyncDialect>();
 
   mlir::registerAllPasses();
   mlir::PassPipelineRegistration<>("lab-op-stats", "Lab Op Stats Pass",
@@ -43,6 +45,12 @@ int main(int argc, char **argv) {
       "lab-fusion-feasibility", "Lab Fusion Feasibility Pass",
       [](mlir::OpPassManager &pm) {
         pm.addPass(mlir::createLabFusionFeasibilityPass());
+      });
+
+  mlir::PassPipelineRegistration<>(
+      "lab-async-local-schedule", "Lab Async Local Schedule Pass",
+      [](mlir::OpPassManager &pm) {
+        pm.addPass(mlir::createAsyncLocalSchedulePass());
       });
 
   return mlir::asMainReturnCode(
