@@ -19,26 +19,31 @@ int main(int argc, char **argv) {
   registry.insert<mlir::func::FuncDialect, mlir::linalg::LinalgDialect,
                   mlir::arith::ArithDialect, mlir::tensor::TensorDialect,
                   mlir::memref::MemRefDialect, mlir::scf::SCFDialect,
-                  mlir::affine::AffineDialect,
-                  mlir::cf::ControlFlowDialect>();
+                  mlir::affine::AffineDialect, mlir::cf::ControlFlowDialect>();
 
   mlir::registerAllPasses();
   mlir::PassPipelineRegistration<>("lab-op-stats", "Lab Op Stats Pass",
                                    [](mlir::OpPassManager &pm) {
                                      pm.addPass(mlir::createLabOpStatsPass());
                                    });
-  mlir::PassPipelineRegistration<>("lab-buffer-stats", "Lab Buffer Stats Pass",
-                                   [](mlir::OpPassManager &pm) {
-                                     pm.addPass(mlir::createLabBufferStatsPass());
-                                   });
+  mlir::PassPipelineRegistration<>(
+      "lab-buffer-stats", "Lab Buffer Stats Pass", [](mlir::OpPassManager &pm) {
+        pm.addPass(mlir::createLabBufferStatsPass());
+      });
   mlir::PassPipelineRegistration<>("lab-liveness", "Lab Liveness Pass",
                                    [](mlir::OpPassManager &pm) {
                                      pm.addPass(mlir::createLabLivenessPass());
                                    });
-  mlir::PassPipelineRegistration<>("lab-memref-lifetime", "Lab Memref Lifetime Pass",
-                                   [](mlir::OpPassManager &pm) {
-                                     pm.addPass(mlir::createLabMemrefLifetimePass());
-                                   });
+  mlir::PassPipelineRegistration<>(
+      "lab-memref-lifetime", "Lab Memref Lifetime Pass",
+      [](mlir::OpPassManager &pm) {
+        pm.addPass(mlir::createLabMemrefLifetimePass());
+      });
+  mlir::PassPipelineRegistration<>(
+      "lab-fusion-feasibility", "Lab Fusion Feasibility Pass",
+      [](mlir::OpPassManager &pm) {
+        pm.addPass(mlir::createLabFusionFeasibilityPass());
+      });
 
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "Lab optimizer\n", registry));

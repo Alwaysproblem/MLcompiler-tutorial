@@ -15,6 +15,8 @@ add_executable(
   lib/BufferAnalysisPass.cpp
   lib/LivenessAnalysisPass.cpp
   lib/MemrefLifetime.cpp
+  lib/FusionFeasibility.cpp
+  lib/LivenessAdapter.cpp
   )
 
 # add_dependencies(lab-scheduler ToyCh6ShapeInferenceInterfaceIncGen
