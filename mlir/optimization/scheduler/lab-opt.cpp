@@ -52,7 +52,11 @@ int main(int argc, char **argv) {
       [](mlir::OpPassManager &pm) {
         pm.addPass(mlir::createAsyncLocalSchedulePass());
       });
-
+  mlir::PassPipelineRegistration<>(
+      "simple-loop-interchange", "Simple Loop Interchange Pass",
+      [](mlir::OpPassManager &pm) {
+        pm.addPass(mlir::createSimpleLoopInterchangePass());
+      });
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "Lab optimizer\n", registry));
 }

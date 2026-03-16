@@ -18,6 +18,7 @@ add_executable(
   lib/FusionFeasibility.cpp
   lib/LivenessAdapter.cpp
   lib/LocalListScheduling.cpp
+  lib/SimpleLoopInterchange.cpp
   )
 
 # add_dependencies(lab-scheduler ToyCh6ShapeInferenceInterfaceIncGen
