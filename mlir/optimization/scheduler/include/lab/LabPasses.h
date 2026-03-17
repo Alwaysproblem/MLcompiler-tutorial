@@ -17,5 +17,6 @@ std::unique_ptr<Pass> createLabMemrefLifetimePass();
 std::unique_ptr<Pass> createLabFusionFeasibilityPass();
 std::unique_ptr<Pass> createAsyncLocalSchedulePass();
 std::unique_ptr<Pass> createSimpleLoopInterchangePass();
+std::unique_ptr<Pass> createResidencyAnalysisPass();
 
 } // namespace mlir

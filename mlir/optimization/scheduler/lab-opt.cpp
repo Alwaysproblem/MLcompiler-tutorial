@@ -46,7 +46,6 @@ int main(int argc, char **argv) {
       [](mlir::OpPassManager &pm) {
         pm.addPass(mlir::createLabFusionFeasibilityPass());
       });
-
   mlir::PassPipelineRegistration<>(
       "lab-async-local-schedule", "Lab Async Local Schedule Pass",
       [](mlir::OpPassManager &pm) {
@@ -57,6 +56,12 @@ int main(int argc, char **argv) {
       [](mlir::OpPassManager &pm) {
         pm.addPass(mlir::createSimpleLoopInterchangePass());
       });
+  mlir::PassPipelineRegistration<>(
+      "residency-analysis", "Buffer Residency Analysis Pass",
+      [](mlir::OpPassManager &pm) {
+        pm.addPass(mlir::createResidencyAnalysisPass());
+      });
+
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "Lab optimizer\n", registry));
 }

@@ -19,6 +19,7 @@ add_executable(
   lib/LivenessAdapter.cpp
   lib/LocalListScheduling.cpp
   lib/SimpleLoopInterchange.cpp
+  lib/BufferResidencyAnalysis.cpp
   )
 
 # add_dependencies(lab-scheduler ToyCh6ShapeInferenceInterfaceIncGen
